@@ -1,28 +1,39 @@
-{# One line of a LoxBerry form: label, field, help text #}
+{# One field of a form in the house form (4.2.0, like Dashboard):
+   label above, field, help text right below. Up to 4.1.1 this was the
+   two-column LoxBerry grid (lb_flex-*). #}
 {% macro row(for, label, field, hint, class) %}
-<div class="lb_flex-container {{ class }}">
-    <div class="lb_flex-item-label">
-        <label class="control-label" for="{{ for }}">{{ label }}</label>
-    </div>
-    <div class="lb_flex-item-spacer"></div>
-    <div class="lb_flex-item">
-        {{ field | raw }}
-    </div>
-    <div class="lb_flex-item-spacer"></div>
-    <div class="lb_flex-item-help hint">
-        {{ hint }}
-    </div>
-    <div class="lb_flex-item-spacer"></div>
+<div class="sm-feld {{ class }}">
+    {% if label %}<label{% if for %} for="{{ for }}"{% endif %}>{{ label }}</label>{% endif %}
+    {{ field | raw }}
+    {% if hint %}<p class="sm-hilfe">{{ hint }}</p>{% endif %}
 </div>
+{% endmacro %}
+
+{# 4.2.0: a checkbox - small, the label next to it, help text below; no
+   jQuery Mobile button #}
+{% macro haken(id, label, hint, class) %}
+<div class="sm-feld sm-haken {{ class }}">
+    <label><input data-role="none" type="checkbox" name="{{ id }}" id="{{ id }}"> {{ label }}</label>
+    {% if hint %}<p class="sm-hilfe">{{ hint }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{# 4.2.0: a secret shown masked (Regeln/05); the grey button shows it and
+   selects it for copying. Works without a script file (the UI view loads
+   none). #}
+{% macro geheim(id, wert) %}
+<span class="sm-geheim"><input data-role="none" type="password" readonly autocomplete="off" id="{{ id }}" value="{{ wert }}">
+<button data-role="none" type="button" class="sm-btn sm-b-technik" data-an="{{ 'Common.Zeigen' | trans }}" data-aus="{{ 'Common.Verbergen' | trans }}"
+    onclick="var f = document.getElementById('{{ id }}'); var z = f.type === 'password'; f.type = z ? 'text' : 'password'; this.textContent = z ? this.getAttribute('data-aus') : this.getAttribute('data-an'); if (z) { f.select(); }">{{ 'Common.Zeigen' | trans }}</button></span>
 {% endmacro %}
 
 {# 4.1.1 (Q1): colour legend of the buttons, one per tab, with exactly the
    colours used on that tab: lesen (green), technik (grey), aktion (orange) #}
 {% macro legende(farben) %}
-<div class="zng-legende">
-    {% if 'lesen' in farben %}<span><i class="zng-punkt zng-b-lesen"></i> {{ 'Legende.Lesen' | trans }}</span>{% endif %}
-    {% if 'technik' in farben %}<span><i class="zng-punkt zng-b-technik"></i> {{ 'Legende.Technik' | trans }}</span>{% endif %}
-    {% if 'aktion' in farben %}<span><i class="zng-punkt zng-b-aktion"></i> {{ 'Legende.Aktion' | trans }}</span>{% endif %}
+<div class="sm-legende">
+    {% if 'lesen' in farben %}<span><i class="sm-punkt sm-b-lesen"></i> {{ 'Legende.Lesen' | trans }}</span>{% endif %}
+    {% if 'technik' in farben %}<span><i class="sm-punkt sm-b-technik"></i> {{ 'Legende.Technik' | trans }}</span>{% endif %}
+    {% if 'aktion' in farben %}<span><i class="sm-punkt sm-b-aktion"></i> {{ 'Legende.Aktion' | trans }}</span>{% endif %}
 </div>
 {% endmacro %}
 
@@ -41,8 +52,8 @@
 {# Save button with the messages above it #}
 {% macro savebutton() %}
 {% import _self as me %}
-<div id="validationerrors" class="zng-error" style="display:none" data-title="{{ 'Common.ValidationError' | trans }}"></div>
-<div class="zng-center" style="min-height:16px">
+<div id="validationerrors" class="sm-fehler" style="display:none" data-title="{{ 'Common.ValidationError' | trans }}"></div>
+<div class="sm-mitte" style="min-height:16px">
     <span id="savemessages">
         <span class="submitting" style="display: none;">{{ 'Common.Submitting' | trans }}</span>
         <span class="saveok" style="display: none;">{{ 'Common.HintSaveOK' | trans }}</span>
@@ -51,10 +62,10 @@
     </span>
 </div>
 {{ me.diensttexte() }}
-<div class="zng-center">
-    <button data-role="none" class="zng-btn zng-b-aktion" id="saveapply" type="button">{{ 'Common.SaveApply' | trans }}</button>
+<div class="sm-mitte">
+    <button data-role="none" class="sm-btn sm-b-aktion" id="saveapply" type="button">{{ 'Common.SaveApply' | trans }}</button>
 </div>
-<div class="zng-center">
+<div class="sm-mitte">
     <span style="display:none" id="service_running">{{ 'Common.ServiceRunning' | trans }} (PID <span id="servicepid">0</span>)</span>
     <span style="display:none" id="service_not_running">{{ 'Common.ServiceNotRunning' | trans }}</span>
 </div>
@@ -63,11 +74,11 @@
 {# 4.1.1 (B14): start (green), restart and stop (orange); the answer says
    what happened, measured afterwards #}
 {% macro dienstknoepfe() %}
-<h3>{{ 'Dienst.Titel' | trans }}</h3>
-<div class="zng-buttons">
-    <button data-role="none" type="button" class="zng-btn zng-b-lesen zng-dienst" data-tat="start">{{ 'Dienst.Start' | trans }}</button>
-    <button data-role="none" type="button" class="zng-btn zng-b-aktion zng-dienst" data-tat="restart">{{ 'Dienst.Neustart' | trans }}</button>
-    <button data-role="none" type="button" class="zng-btn zng-b-aktion zng-dienst" data-tat="stop">{{ 'Dienst.Anhalten' | trans }}</button>
+<h2>{{ 'Dienst.Titel' | trans }}</h2>
+<div class="sm-knopfreihe">
+    <button data-role="none" type="button" class="sm-btn sm-b-lesen" data-tat="start">{{ 'Dienst.Start' | trans }}</button>
+    <button data-role="none" type="button" class="sm-btn sm-b-aktion" data-tat="restart">{{ 'Dienst.Neustart' | trans }}</button>
+    <button data-role="none" type="button" class="sm-btn sm-b-aktion" data-tat="stop">{{ 'Dienst.Anhalten' | trans }}</button>
     <span id="dienstergebnis" data-laeuft-schon="{{ 'Dienst.Arbeitet' | trans }}"></span>
 </div>
 <p class="hint">{{ 'Dienst.Hinweis' | trans }}</p>
@@ -77,25 +88,25 @@
 {% macro konfiglage(k) %}
 {% for d in k.dateien %}
 {% if d.lage == 'kaputt' %}
-<div class="zng-error">
+<div class="sm-fehler">
     <b>{{ 'Konfig.KaputtTitel' | trans | replace({'%s': d.name}) }}</b><br>
     {{ 'Konfig.KaputtText' | trans | replace({'%s': d.datei}) }}
     {% if d.kaputt %}<br>{{ 'Konfig.KaputtKopie' | trans }} <code>{{ d.kaputt }}</code>{% endif %}
     <br>{% if d.name == 'configuration.yaml' %}{{ 'Konfig.KaputtYaml' | trans }}{% else %}{{ 'Konfig.KaputtJson' | trans }}{% endif %}
 </div>
 {% elseif d.kaputt %}
-<div class="zng-warning">{{ 'Konfig.AlteKaputt' | trans | replace({'%s': d.name}) }} <code>{{ d.kaputt }}</code></div>
+<div class="sm-warnung">{{ 'Konfig.AlteKaputt' | trans | replace({'%s': d.name}) }} <code>{{ d.kaputt }}</code></div>
 {% endif %}
 {% endfor %}
 {% if k.sperre %}
-<div class="zng-error"><b>{{ 'Konfig.SperreTitel' | trans }}</b><br>{{ 'Konfig.SperreText' | trans | replace({'%s': k.sperre}) }}</div>
+<div class="sm-fehler"><b>{{ 'Konfig.SperreTitel' | trans }}</b><br>{{ 'Konfig.SperreText' | trans | replace({'%s': k.sperre}) }}</div>
 {% endif %}
 {% endmacro %}
 
 {# Warning for every predecessor plugin that is still installed #}
 {% macro predecessors(list) %}
 {% for p in list %}
-<div class="zng-warning">
+<div class="sm-warnung">
     <b>{{ 'Common.OriginalTitle' | trans | replace({'%s': p.title}) }}</b><br>
     {% if p.active %}{{ 'Common.OriginalActive' | trans }}{% else %}{{ 'Common.OriginalInstalled' | trans }}{% endif %}
 </div>

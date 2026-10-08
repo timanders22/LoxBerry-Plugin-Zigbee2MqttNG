@@ -2,18 +2,16 @@
 
 {{ m.konfiglage(konfig) }}
 {{ m.predecessors(predecessors) }}
-{{ m.legende(['lesen', 'aktion']) }}
+{# 4.2.0: grey only where the button of the masked token stands #}
+{{ m.legende(service.enableUI and service.frontendAuth and service.frontendToken ? ['lesen', 'technik', 'aktion'] : ['lesen', 'aktion']) }}
 
 <form id="ServiceConfig" onsubmit="return false;">
-    <div class="wide">Zigbee2MqttNG</div>
-    <p><i>{{ 'ServiceConfig.Desc' | trans }}</i></p>
-
     <!-- ============ Adapter ============ -->
-    <h3>{{ 'ServiceConfig.AdapterTitle' | trans }}</h3>
+    <h2>{{ 'ServiceConfig.AdapterTitle' | trans }}</h2>
 
     {% set f %}
     <!-- no name attribute: the preset only fills the fields below, it is not saved itself -->
-    <select id="coordinatorPreset" data-mini="true">
+    <select id="coordinatorPreset" data-role="none">
         <option value="">{{ 'ServiceConfig.PresetManual' | trans }}</option>
         <option value="dongle-m-net">SONOFF Dongle Max / Dongle-M (Ethernet, PoE, WiFi)</option>
         <option value="dongle-m-usb">SONOFF Dongle Max / Dongle-M (USB)</option>
@@ -25,15 +23,15 @@
     {{ m.row('coordinatorPreset', 'ServiceConfig.LabelPreset' | trans, f, 'ServiceConfig.HintPreset' | trans) }}
 
     {% set f %}
-    <input value="" id="ServiceConfig[port]" name="ServiceConfig[port]" type="text" class="textfield" list="serialports" autocomplete="off">
+    <input value="" id="ServiceConfig[port]" name="ServiceConfig[port]" type="text" class="textfield" data-role="none" list="serialports" autocomplete="off">
     <datalist id="serialports"></datalist>
-    <div id="portwarning" class="zng-warning" style="display:none" data-text="{{ 'ServiceConfig.PortUnstable' | trans }}"></div>
+    <div id="portwarning" class="sm-warnung" style="display:none" data-text="{{ 'ServiceConfig.PortUnstable' | trans }}"></div>
     <div id="portlist" class="hint" data-title="{{ 'ServiceConfig.PortList' | trans }}"></div>
     {% endset %}
     {{ m.row('ServiceConfig[port]', 'ServiceConfig.LabelPort' | trans, f, 'ServiceConfig.HintPort' | trans) }}
 
     {% set f %}
-    <button data-role="none" type="button" id="testport" class="zng-btn zng-b-lesen">{{ 'ServiceConfig.ButtonTestPort' | trans }}</button>
+    <button data-role="none" type="button" id="testport" class="sm-btn sm-b-lesen">{{ 'ServiceConfig.ButtonTestPort' | trans }}</button>
     <span id="testportresult"
         data-reachable="{{ 'ServiceConfig.TestReachable' | trans }}"
         data-unreachable="{{ 'ServiceConfig.TestUnreachable' | trans }}"
@@ -47,7 +45,7 @@
     {{ m.row('testport', 'ServiceConfig.LabelTestPort' | trans, f, 'ServiceConfig.HintTestPort' | trans) }}
 
     {% set f %}
-    <select id="ServiceConfig[adapter]" name="ServiceConfig[adapter]" data-mini="true">
+    <select id="ServiceConfig[adapter]" name="ServiceConfig[adapter]" data-role="none">
         <option value="">{{ 'ServiceConfig.AdapterAuto' | trans }}</option>
         {% for a in adapters %}<option value="{{ a }}">{{ a }}</option>
         {% endfor %}
@@ -56,12 +54,12 @@
     {{ m.row('ServiceConfig[adapter]', 'ServiceConfig.LabelAdapter' | trans, f, 'ServiceConfig.HintAdapter' | trans) }}
 
     {% set f %}
-    <input value="" id="ServiceConfig[baudrate]" name="ServiceConfig[baudrate]" type="text" class="textfield" inputmode="numeric">
+    <input value="" id="ServiceConfig[baudrate]" name="ServiceConfig[baudrate]" type="text" class="textfield" data-role="none" inputmode="numeric">
     {% endset %}
     {{ m.row('ServiceConfig[baudrate]', 'ServiceConfig.LabelBaudrate' | trans, f, 'ServiceConfig.HintBaudrate' | trans) }}
 
     {% set f %}
-    <select id="ServiceConfig[rtscts]" name="ServiceConfig[rtscts]" data-mini="true">
+    <select id="ServiceConfig[rtscts]" name="ServiceConfig[rtscts]" data-role="none">
         <option value="">{{ 'ServiceConfig.RtsctsUnset' | trans }}</option>
         <option value="false">false</option>
         <option value="true">true</option>
@@ -70,10 +68,10 @@
     {{ m.row('ServiceConfig[rtscts]', 'ServiceConfig.LabelRtscts' | trans, f, 'ServiceConfig.HintRtscts' | trans) }}
 
     <!-- ============ Radio ============ -->
-    <h3>{{ 'ServiceConfig.RadioTitle' | trans }}</h3>
+    <h2>{{ 'ServiceConfig.RadioTitle' | trans }}</h2>
 
     {% set f %}
-    <select id="ServiceConfig[channel]" name="ServiceConfig[channel]" data-mini="true">
+    <select id="ServiceConfig[channel]" name="ServiceConfig[channel]" data-role="none">
         <option value="">{{ 'ServiceConfig.ChannelUnset' | trans }}</option>
         {% for c in 11..26 %}<option value="{{ c }}">{{ c }}{% if c in [11, 15, 20, 25] %} (ZLL){% endif %}</option>
         {% endfor %}
@@ -88,36 +86,31 @@
     {% endset %}
     {{ m.row('ServiceConfig[channel]', 'ServiceConfig.LabelChannel' | trans, f, 'ServiceConfig.HintChannel' | trans) }}
 
-    {% set f %}<input type="checkbox" name="ServiceConfig[availability]" id="ServiceConfig[availability]">{% endset %}
-    {{ m.row('ServiceConfig[availability]', 'ServiceConfig.LabelAvailability' | trans, f, 'ServiceConfig.HintAvailability' | trans) }}
+        {{ m.haken('ServiceConfig[availability]', 'ServiceConfig.LabelAvailability' | trans, 'ServiceConfig.HintAvailability' | trans, '') }}
 
     <!-- ============ Frontend ============ -->
-    <h3>{{ 'ServiceConfig.UITitle' | trans }}</h3>
+    <h2>{{ 'ServiceConfig.UITitle' | trans }}</h2>
 
-    {% set f %}<input type="checkbox" name="ServiceConfig[enableUI]" id="ServiceConfig[enableUI]">{% endset %}
-    {{ m.row('ServiceConfig[enableUI]', 'ServiceConfig.LabelEnableUI' | trans, f, 'ServiceConfig.HintEnableUI' | trans) }}
+        {{ m.haken('ServiceConfig[enableUI]', 'ServiceConfig.LabelEnableUI' | trans, 'ServiceConfig.HintEnableUI' | trans, '') }}
 
-    {% set f %}<input value="" id="ServiceConfig[frontendPort]" name="ServiceConfig[frontendPort]" type="text" class="textfield" inputmode="numeric">{% endset %}
+    {% set f %}<input value="" id="ServiceConfig[frontendPort]" name="ServiceConfig[frontendPort]" type="text" class="textfield" data-role="none" inputmode="numeric">{% endset %}
     {{ m.row('ServiceConfig[frontendPort]', 'ServiceConfig.LabelFrontendPort' | trans, f, 'ServiceConfig.HintFrontendPort' | trans) }}
 
-    {% set f %}<input type="checkbox" name="ServiceConfig[frontendAuth]" id="ServiceConfig[frontendAuth]">{% endset %}
-    {{ m.row('ServiceConfig[frontendAuth]', 'ServiceConfig.LabelFrontendAuth' | trans, f, 'ServiceConfig.HintFrontendAuth' | trans) }}
+        {{ m.haken('ServiceConfig[frontendAuth]', 'ServiceConfig.LabelFrontendAuth' | trans, 'ServiceConfig.HintFrontendAuth' | trans, '') }}
 
     {% if service.enableUI and service.frontendAuth and service.frontendToken %}
-    {% set f %}<code>{{ service.frontendToken }}</code>{% endset %}
+    {% set f %}{{ m.geheim('uitoken', service.frontendToken) }}{% endset %}
     {{ m.row('', 'ServiceConfig.LabelFrontendToken' | trans, f, 'ServiceConfig.HintFrontendToken' | trans) }}
     {% endif %}
 
     <!-- ============ Notifications ============ -->
-    <h3>{{ 'ServiceConfig.NotifyTitle' | trans }}</h3>
+    <h2>{{ 'ServiceConfig.NotifyTitle' | trans }}</h2>
 
-    {% set f %}<input type="checkbox" name="ServiceConfig[notifyOffline]" id="ServiceConfig[notifyOffline]">{% endset %}
-    {{ m.row('ServiceConfig[notifyOffline]', 'ServiceConfig.LabelNotifyOffline' | trans, f, 'ServiceConfig.HintNotifyOffline' | trans) }}
+        {{ m.haken('ServiceConfig[notifyOffline]', 'ServiceConfig.LabelNotifyOffline' | trans, 'ServiceConfig.HintNotifyOffline' | trans, '') }}
 
-    {% set f %}<input type="checkbox" name="ServiceConfig[notifyBattery]" id="ServiceConfig[notifyBattery]">{% endset %}
-    {{ m.row('ServiceConfig[notifyBattery]', 'ServiceConfig.LabelNotifyBattery' | trans, f, 'ServiceConfig.HintNotifyBattery' | trans) }}
+        {{ m.haken('ServiceConfig[notifyBattery]', 'ServiceConfig.LabelNotifyBattery' | trans, 'ServiceConfig.HintNotifyBattery' | trans, '') }}
 
-    {% set f %}<input value="" id="ServiceConfig[batteryThreshold]" name="ServiceConfig[batteryThreshold]" type="text" class="textfield" inputmode="numeric">{% endset %}
+    {% set f %}<input value="" id="ServiceConfig[batteryThreshold]" name="ServiceConfig[batteryThreshold]" type="text" class="textfield" data-role="none" inputmode="numeric">{% endset %}
     {{ m.row('ServiceConfig[batteryThreshold]', 'ServiceConfig.LabelBatteryThreshold' | trans, f, 'ServiceConfig.HintBatteryThreshold' | trans) }}
 </form>
 
@@ -126,18 +119,18 @@
 {{ m.dienstknoepfe() }}
 
 <hr>
-<div class="wide">{{ 'Backup.Title' | trans }}</div>
+<h2>{{ 'Backup.Title' | trans }}</h2>
 
 <!-- 4.1.1 (B3): the settings of the plugin, with the credentials -->
 <h3>{{ 'Sicherung.Titel' | trans }}</h3>
 <p>{{ 'Sicherung.Desc' | trans }}</p>
-<div class="zng-buttons">
-    <a data-role="none" data-ajax="false" class="zng-btn zng-b-lesen" href="ajax.php?action=backupSettings">{{ 'Sicherung.Sichern' | trans }}</a>
+<div class="sm-knopfreihe">
+    <a data-role="none" data-ajax="false" class="sm-btn sm-b-lesen" href="ajax.php?action=backupSettings">{{ 'Sicherung.Sichern' | trans }}</a>
 </div>
 <p class="hint"><b>{{ 'Sicherung.Secret' | trans }}</b></p>
-<div class="zng-buttons">
+<div class="sm-knopfreihe">
     <input data-role="none" type="file" id="sicherungdatei" accept=".json,application/json">
-    <button data-role="none" type="button" id="sicherungladen" class="zng-btn zng-b-aktion">{{ 'Sicherung.Zurueck' | trans }}</button>
+    <button data-role="none" type="button" id="sicherungladen" class="sm-btn sm-b-aktion">{{ 'Sicherung.Zurueck' | trans }}</button>
 </div>
 <p class="hint">{{ 'Sicherung.ZurueckHinweis' | trans }}</p>
 <div id="sicherungergebnis" style="display:none"
@@ -149,8 +142,8 @@
 <!-- the Zigbee network: ZIP made by zigbee2mqtt itself -->
 <h3>{{ 'Backup.NetzTitel' | trans }}</h3>
 <p>{{ 'Backup.Desc' | trans }}</p>
-<div class="zng-buttons">
-    <a data-role="none" data-ajax="false" class="zng-btn zng-b-lesen" href="backup.php">{{ 'Backup.Button' | trans }}</a>
+<div class="sm-knopfreihe">
+    <a data-role="none" data-ajax="false" class="sm-btn sm-b-lesen" href="ajax.php?action=backupNetwork">{{ 'Backup.Button' | trans }}</a>
 </div>
 <p class="hint"><b>{{ 'Backup.Secret' | trans }}</b></p>
 <p>{{ 'Backup.ZurueckTitel' | trans }}</p>

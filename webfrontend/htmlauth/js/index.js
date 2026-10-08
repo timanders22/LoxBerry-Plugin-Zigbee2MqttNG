@@ -55,19 +55,19 @@ function loadRadioInfo() {
             lines.push(escapeHtml(box.data("thread").replace("%s", info.thread).replace("%t", info.threadSource)));
             if (info.level === "conflict") {
                 lines.push(escapeHtml(box.data("conflict")));
-                level = "zng-error";
+                level = "sm-fehler";
             } else if (info.level === "adjacent") {
                 lines.push(escapeHtml(box.data("adjacent")));
-                level = "zng-warning";
+                level = "sm-warnung";
             } else {
-                lines.push(`<span class="zng-ok">${escapeHtml(box.data("ok"))}</span>`);
+                lines.push(`<span class="sm-ok">${escapeHtml(box.data("ok"))}</span>`);
             }
         }
         if (info.wifi) {
             lines.push(escapeHtml(box.data("wifi").replace("%s", info.wifi).replace("%t", info.wifiInterface)));
             if (info.wifiLevel === "conflict") {
                 lines.push(escapeHtml(box.data("wificonflict")));
-                level = level || "zng-warning";
+                level = level || "sm-warnung";
             } else if (info.wifiLevel === "near") {
                 lines.push(escapeHtml(box.data("wifinear")));
             }
@@ -141,7 +141,7 @@ function testPort() {
  */
 function serviceAction(button) {
     const result = $("#dienstergebnis");
-    $(".zng-dienst").prop("disabled", true);
+    $("button[data-tat]").prop("disabled", true);
     result.css("color", "grey").text(result.data("laeuft-schon"));
     $.post(`ajax.php?action=serviceAction`, { tat: $(button).data("tat") }, null, "json")
         .done(function (answer) {
@@ -151,7 +151,7 @@ function serviceAction(button) {
             result.css("color", "red").text(dienstText(null));
         })
         .always(function () {
-            $(".zng-dienst").prop("disabled", false);
+            $("button[data-tat]").prop("disabled", false);
             getPid();
         });
 }
@@ -164,7 +164,7 @@ function restoreSettings() {
     const box = $("#sicherungergebnis");
     const file = $("#sicherungdatei")[0].files[0];
     if (!file) {
-        box.attr("class", "zng-error").text(box.data("keinedatei")).show();
+        box.attr("class", "sm-fehler").text(box.data("keinedatei")).show();
         return;
     }
     const data = new FormData();
@@ -178,17 +178,17 @@ function restoreSettings() {
                 if (answer.fehlend > 0) {
                     text += " " + String(box.data("fehlend")).replace("%d", answer.fehlend);
                 }
-                box.attr("class", answer.ok ? "zng-warning" : "zng-error").text(text + " " + dienstText(answer));
+                box.attr("class", answer.ok ? "sm-warnung" : "sm-fehler").text(text + " " + dienstText(answer));
             } else {
                 const list = $("<ul>");
                 ((answer && answer.errors) || []).forEach(function (e) {
                     list.append($("<li>").text(e));
                 });
-                box.attr("class", "zng-error").empty().append($("<b>").text(box.data("abgelehnt"))).append(list);
+                box.attr("class", "sm-fehler").empty().append($("<b>").text(box.data("abgelehnt"))).append(list);
             }
         })
         .fail(function () {
-            box.attr("class", "zng-error").text(dienstText(null));
+            box.attr("class", "sm-fehler").text(dienstText(null));
         });
 }
 
@@ -196,7 +196,7 @@ $(document).ready(function () {
     $("#saveapply").click(function () {
         saveAndApply(["ServiceConfig"]);
     });
-    $(".zng-dienst").click(function () {
+    $("button[data-tat]").click(function () {
         serviceAction(this);
     });
     $("#sicherungladen").click(restoreSettings);

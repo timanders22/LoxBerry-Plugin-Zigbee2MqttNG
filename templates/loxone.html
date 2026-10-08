@@ -1,14 +1,13 @@
 {% import 'macros.html' as m %}
-<div class="wide">{{ 'Navbar.Loxone' | trans }}</div>
-<p><i>{{ 'Loxone.Desc' | trans }}</i></p>
+<p class="sm-hilfe">{{ 'Loxone.Desc' | trans }}</p>
 {{ m.legende(['technik']) }}
 
 {# 4.1.1 (B6): the tab in seven steps (Regeln/04, "Einbindung in Loxone") #}
 
-<div class="zng-step">
+<div class="sm-step">
     <h3>{{ 'Loxone.S1' | trans }}</h3>
     <p>{{ 'Loxone.S1Text' | trans }}</p>
-    <table class="zng-table">
+    <table class="sm-tbl">
         <tr>
             <th>{{ 'Loxone.GatewayVersion' | trans }}</th>
             <td>{% if gateway.version %}V{{ gateway.version }}{% else %}?{% endif %}</td>
@@ -23,7 +22,7 @@
         </tr>
         <tr>
             <th>{{ 'Loxone.Booleans' | trans }}</th>
-            <td>{% if gateway.convert_booleans %}{{ 'Loxone.BooleansOn' | trans }}{% else %}<span class="zng-warning">{{ 'Loxone.BooleansOff' | trans }}</span>{% endif %}</td>
+            <td>{% if gateway.convert_booleans %}{{ 'Loxone.BooleansOn' | trans }}{% else %}<span class="sm-warnung">{{ 'Loxone.BooleansOff' | trans }}</span>{% endif %}</td>
         </tr>
         {% if hausTopics %}
         <tr>
@@ -36,14 +35,14 @@
     {% if gateway.use_udp %}<p>{{ 'Loxone.S1Udp' | trans }}</p>{% endif %}
 </div>
 
-<div class="zng-step">
+<div class="sm-step">
     <h3>{{ 'Loxone.S2' | trans }}</h3>
     {% if not usegateway %}
     <p>{{ 'Loxone.S2EigenerBroker' | trans }}</p>
     {% else %}
     {% if gateway.version != 2 %}
     <p>{{ 'Loxone.S2V1' | trans }}</p>
-    <p>{% if registriert %}<span class="zng-ok">&#10004;</span> {{ 'Loxone.S2Ok' | trans | replace({'%d': abos}) }}{% else %}<span class="zng-fail">&#10008;</span> {{ 'Loxone.S2Fehlt' | trans }}{% endif %}</p>
+    <p>{% if registriert %}<span class="sm-ok">&#10004;</span> {{ 'Loxone.S2Ok' | trans | replace({'%d': abos}) }}{% else %}<span class="sm-fail">&#10008;</span> {{ 'Loxone.S2Fehlt' | trans }}{% endif %}</p>
     {% endif %}
     {% if gateway.version != 1 %}
     <p>{{ 'Loxone.S2V2' | trans }}</p>
@@ -51,37 +50,37 @@
     {% endif %}
 </div>
 
-<div class="zng-step">
+<div class="sm-step">
     <h3>{{ 'Loxone.S3' | trans }}</h3>
     <p>{{ 'Loxone.S3Text' | trans }}</p>
     <p><b>{{ 'Loxone.Pflichtsatz' | trans }}</b></p>
-    <div class="zng-buttons">
-        {% if gateway.use_http %}<a data-role="none" data-ajax="false" class="zng-btn zng-b-technik" href="ajax.php?action=getTemplate&kind=inhttp">{{ 'Loxone.AllInputsHttp' | trans }}</a>{% endif %}
-        {% if gateway.use_udp and gateway.udpport %}<a data-role="none" data-ajax="false" class="zng-btn zng-b-technik" href="ajax.php?action=getTemplate&kind=in">{{ 'Loxone.AllInputs' | trans }}</a>{% endif %}
+    <div class="sm-knopfreihe">
+        {% if gateway.use_http %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=inhttp">{{ 'Loxone.AllInputsHttp' | trans }}</a>{% endif %}
+        {% if gateway.use_udp and gateway.udpport %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=in">{{ 'Loxone.AllInputs' | trans }}</a>{% endif %}
     </div>
-    {% if gateway.use_udp and not gateway.udpport %}<div class="zng-warning">{{ 'Loxone.NoUdpPort' | trans }}</div>{% endif %}
+    {% if gateway.use_udp and not gateway.udpport %}<div class="sm-warnung">{{ 'Loxone.NoUdpPort' | trans }}</div>{% endif %}
     <p class="hint">{{ 'Loxone.HintTemplates' | trans }} {{ 'Loxone.TextWerte' | trans | replace({'%d': textCount}) }}</p>
     <p class="hint">{{ 'Loxone.EinzelOderAlle' | trans }}</p>
     {% if availability %}<p>{{ 'Loxone.Erreichbar' | trans }}: <code>{{ 'Loxone.ErreichbarText' | trans }}</code></p>{% endif %}
     {% if hasActions %}<p>{{ 'Loxone.Aktionen' | trans }}: <code>{{ 'Loxone.AktionenText' | trans }}</code></p>{% endif %}
 
     {% if not hasDeviceList %}
-    <div class="zng-warning">{{ 'Loxone.NoDeviceList' | trans }}</div>
+    <div class="sm-warnung">{{ 'Loxone.NoDeviceList' | trans }}</div>
     {% elseif devices|length == 0 %}
-    <div class="zng-warning">{{ 'Loxone.NoDevices' | trans }}</div>
+    <div class="sm-warnung">{{ 'Loxone.NoDevices' | trans }}</div>
     {% endif %}
 
     {% for device in devices %}
     <div data-role="collapsible" data-collapsed="true" data-mini="true">
         <h3>{{ device.name }} <small>{{ device.vendor }} {{ device.model }}</small></h3>
-        <div class="zng-buttons">
-            {% if gateway.use_http %}<a data-role="none" data-ajax="false" class="zng-btn zng-b-technik" href="ajax.php?action=getTemplate&kind=inhttp&device={{ device.name | url_encode }}">{{ 'Loxone.InputsHttp' | trans }}</a>{% endif %}
-            {% if gateway.use_udp and gateway.udpport %}<a data-role="none" data-ajax="false" class="zng-btn zng-b-technik" href="ajax.php?action=getTemplate&kind=in&device={{ device.name | url_encode }}">{{ 'Loxone.Inputs' | trans }}</a>{% endif %}
+        <div class="sm-knopfreihe">
+            {% if gateway.use_http %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=inhttp&device={{ device.name | url_encode }}">{{ 'Loxone.InputsHttp' | trans }}</a>{% endif %}
+            {% if gateway.use_udp and gateway.udpport %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=in&device={{ device.name | url_encode }}">{{ 'Loxone.Inputs' | trans }}</a>{% endif %}
             {% if device.outputs|length > 0 %}
-            <a data-role="none" data-ajax="false" class="zng-btn zng-b-technik" href="ajax.php?action=getTemplate&kind=out&device={{ device.name | url_encode }}">{{ 'Loxone.Outputs' | trans }}</a>
+            <a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=out&device={{ device.name | url_encode }}">{{ 'Loxone.Outputs' | trans }}</a>
             {% endif %}
         </div>
-        <table class="zng-table">
+        <table class="sm-tbl">
             <tr>
                 <th>{{ 'Loxone.Name' | trans }}</th>
                 <th>{{ 'Loxone.Kachel' | trans }}</th>
@@ -101,16 +100,16 @@
     {% endfor %}
 </div>
 
-<div class="zng-step">
+<div class="sm-step">
     <h3>{{ 'Loxone.S4' | trans }}</h3>
     <p>{{ 'Loxone.S4Text' | trans }} <code>/dev/udp/{{ loxberryIp }}/{{ gateway.udpinport }}</code></p>
-    <div class="zng-buttons">
-        <a data-role="none" data-ajax="false" class="zng-btn zng-b-technik" href="ajax.php?action=getTemplate&kind=out">{{ 'Loxone.AllOutputs' | trans }}</a>
+    <div class="sm-knopfreihe">
+        <a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=out">{{ 'Loxone.AllOutputs' | trans }}</a>
     </div>
     {% for device in devices %}{% if device.outputs|length > 0 %}
     <div data-role="collapsible" data-collapsed="true" data-mini="true">
         <h3>{{ device.name }}</h3>
-        <table class="zng-table">
+        <table class="sm-tbl">
             <tr>
                 <th>{{ 'Loxone.Output' | trans }}</th>
                 <th>{{ 'Loxone.Kachel' | trans }}</th>
@@ -130,10 +129,10 @@
     {% endif %}{% endfor %}
 </div>
 
-<div class="zng-step">
+<div class="sm-step">
     <h3>{{ 'Loxone.S5' | trans }}</h3>
     <p>{{ 'Loxone.S5Text' | trans }}</p>
-    <table class="zng-table">
+    <table class="sm-tbl">
         <tr>
             <th>{{ 'Loxone.HttpName' | trans }}</th>
             <th>{{ 'Loxone.UdpCheck' | trans }}</th>
@@ -151,10 +150,10 @@
     </table>
 </div>
 
-<div class="zng-step">
+<div class="sm-step">
     <h3>{{ 'Loxone.S6' | trans }}</h3>
     <p>{{ 'Loxone.S6Text' | trans }}</p>
-    <table class="zng-table">
+    <table class="sm-tbl">
         <tr>
             <th>#</th>
             <th>{{ 'Baustein.Typ' | trans }}</th>
@@ -182,7 +181,7 @@
     <p class="hint">{{ 'Baustein.Suche' | trans }}</p>
 </div>
 
-<div class="zng-step">
+<div class="sm-step">
     <h3>{{ 'Loxone.S7' | trans }}</h3>
     <ol>
         <li>{{ 'Loxone.S7a' | trans }}</li>

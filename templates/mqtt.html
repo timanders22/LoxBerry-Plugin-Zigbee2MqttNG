@@ -4,21 +4,18 @@
 {{ m.legende(['aktion']) }}
 
 <form id="MqttConfig" onsubmit="return false;">
-    <div class="wide">MQTT</div>
-    <p><i>{{ 'Mqtt.Desc' | trans }}</i></p>
+    <p class="sm-hilfe">{{ 'Mqtt.Desc' | trans }}</p>
 
-    {% set f %}<input value="" id="MqttConfig[topic]" name="MqttConfig[topic]" type="text" class="textfield">{% endset %}
+    {% set f %}<input value="" id="MqttConfig[topic]" name="MqttConfig[topic]" type="text" class="textfield" data-role="none">{% endset %}
     {{ m.row('MqttConfig[topic]', 'Mqtt.LabelTopic' | trans, f, 'Mqtt.HintTopic' | trans) }}
 
     {% if mqtt_installed %}
-    {% set f %}<input type="checkbox" name="MqttConfig[usemqttgateway]" id="MqttConfig[usemqttgateway]">{% endset %}
-    {{ m.row('MqttConfig[usemqttgateway]', 'Mqtt.LabelUseMqttGateway' | trans, f, 'Mqtt.HintUseMqttGateway' | trans) }}
+        {{ m.haken('MqttConfig[usemqttgateway]', 'Mqtt.LabelUseMqttGateway' | trans, 'Mqtt.HintUseMqttGateway' | trans, '') }}
 
-    {% set f %}<input type="checkbox" name="MqttConfig[registerMqttTopic]" id="MqttConfig[registerMqttTopic]">{% endset %}
-    {{ m.row('MqttConfig[registerMqttTopic]', 'Mqtt.LabelRegisterMqttTopic' | trans, f, 'Mqtt.HintRegisterMqttTopic' | trans, 'gatewayonly') }}
+        {{ m.haken('MqttConfig[registerMqttTopic]', 'Mqtt.LabelRegisterMqttTopic' | trans, 'Mqtt.HintRegisterMqttTopic' | trans, 'gatewayonly') }}
 
     {% set f %}
-    <select id="MqttConfig[forwardMode]" name="MqttConfig[forwardMode]" data-mini="true">
+    <select id="MqttConfig[forwardMode]" name="MqttConfig[forwardMode]" data-role="none">
         <option value="devices">{{ 'Mqtt.ForwardDevices' | trans }}</option>
         <option value="all">{{ 'Mqtt.ForwardAll' | trans }}</option>
     </select>
@@ -29,23 +26,22 @@
     {% set f %}<a href="/admin/system/mqtt-gateway.cgi?form=incoming" target="_blank">{{ 'Common.MqttGatwayIncomming' | trans }}</a>{% endset %}
     {{ m.row('', '', f, '', 'gatewayonly') }}
     {% else %}
-    <div class="lb_flex-container">{{ 'Common.MqttGatewayNotInstalled' | trans }}</div>
+    <div class="sm-warnung">{{ 'Common.MqttGatewayNotInstalled' | trans }}</div>
     {% endif %}
 
-    {% set f %}<input value="" id="MqttConfig[server]" name="MqttConfig[server]" type="text" class="textfield">{% endset %}
+    {% set f %}<input value="" id="MqttConfig[server]" name="MqttConfig[server]" type="text" class="textfield" data-role="none">{% endset %}
     {{ m.row('MqttConfig[server]', 'Mqtt.LabelServer' | trans, f, 'Mqtt.HintServer' | trans, 'ownbroker') }}
 
-    {% set f %}<input value="" id="MqttConfig[port]" name="MqttConfig[port]" type="text" class="textfield" inputmode="numeric">{% endset %}
+    {% set f %}<input value="" id="MqttConfig[port]" name="MqttConfig[port]" type="text" class="textfield" data-role="none" inputmode="numeric">{% endset %}
     {{ m.row('MqttConfig[port]', 'Mqtt.LabelPort' | trans, f, 'Mqtt.HintPort' | trans, 'ownbroker') }}
 
-    {% set f %}<input value="" id="MqttConfig[username]" name="MqttConfig[username]" type="text" class="textfield" autocomplete="off">{% endset %}
+    {% set f %}<input value="" id="MqttConfig[username]" name="MqttConfig[username]" type="text" class="textfield" data-role="none" autocomplete="off">{% endset %}
     {{ m.row('MqttConfig[username]', 'Mqtt.LabelUsername' | trans, f, 'Mqtt.HintUsername' | trans, 'ownbroker') }}
 
-    {% set f %}<input value="" id="MqttConfig[password]" name="MqttConfig[password]" type="password" class="textfield" autocomplete="new-password" data-set="{{ 'Mqtt.PasswordSet' | trans }}">{% endset %}
+    {% set f %}<input value="" id="MqttConfig[password]" name="MqttConfig[password]" type="password" class="textfield" data-role="none" autocomplete="new-password" data-set="{{ 'Mqtt.PasswordSet' | trans }}">{% endset %}
     {{ m.row('MqttConfig[password]', 'Mqtt.LabelPassword' | trans, f, 'Mqtt.HintPassword' | trans, 'ownbroker') }}
 
-    {% set f %}<input type="checkbox" name="MqttConfig[hausTopics]" id="MqttConfig[hausTopics]">{% endset %}
-    {{ m.row('MqttConfig[hausTopics]', 'Mqtt.LabelHausTopics' | trans, f, 'Mqtt.HintHausTopics' | trans) }}
+        {{ m.haken('MqttConfig[hausTopics]', 'Mqtt.LabelHausTopics' | trans, 'Mqtt.HintHausTopics' | trans, '') }}
 </form>
 
 {{ m.savebutton() }}

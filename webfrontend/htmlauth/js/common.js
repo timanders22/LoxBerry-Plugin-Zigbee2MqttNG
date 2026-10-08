@@ -109,7 +109,7 @@ function dienstText(a) {
  */
 function showErrors(answer) {
     const box = $("#validationerrors");
-    $(".zng-field-error").removeClass("zng-field-error");
+    $(".sm-beanstandet").removeClass("sm-beanstandet");
     const errors = (answer && answer.errors) || [];
     if (errors.length === 0) {
         box.hide();
@@ -119,7 +119,7 @@ function showErrors(answer) {
     errors.forEach(function (e) {
         list.append($("<li>").text(e.message));
         if (e.field) {
-            $(`[name="${e.form}[${e.field}]"]`).addClass("zng-field-error");
+            $(`[name="${e.form}[${e.field}]"]`).addClass("sm-beanstandet");
         }
     });
     box.empty().append($("<b>").text(box.data("title"))).append(list).show();

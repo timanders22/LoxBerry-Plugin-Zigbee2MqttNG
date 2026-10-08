@@ -45,6 +45,8 @@ if (isset($_GET["action"])) {
         sendresponse(200, "application/json", networkMap());
     } else if ($action == "backupSettings") {
         backupSettings();
+    } else if ($action == "backupNetwork") {
+        backupNetwork();
     } else if ($action == "restoreSettings") {
         sendresponse(200, "application/json", restoreSettings());
     } else if ($action == "getTemplate") {
@@ -63,7 +65,8 @@ if (isset($_GET["action"])) {
  * accepted with the header, and changing actions only as POST.
  * getTemplate is a plain download link and changes nothing. So is
  * backupSettings (4.1.1): the browser saves the file, another site cannot
- * read it - the same as the zigbee2mqtt backup (backup.php).
+ * read it - the same as the zigbee2mqtt backup (backupNetwork, up to
+ * 4.1.1 the page backup.php).
  */
 function requestFromPluginPage($action)
 {
@@ -372,6 +375,47 @@ function backupSettings()
     header("Content-Type: application/json; charset=utf-8");
     header('Content-Disposition: attachment; filename="zigbee2mqttng_einstellungen_' . date('Ymd_His') . '.json"');
     echo json_encode($inhalt, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+    exit(0);
+}
+
+/**
+ * 4.2.0: downloads a backup of the zigbee2mqtt data folder as zip - up to
+ * 4.1.1 the page backup.php, the code is the same. zigbee2mqtt builds it
+ * itself on bridge/request/backup: configuration.yaml, devices,
+ * database.db, coordinator_backup.json, state.json. It contains the
+ * network key and the MQTT credentials.
+ * Nothing is changed. On failure a short plain text says why.
+ * Ends the request itself (exit), like backupSettings().
+ */
+function backupNetwork()
+{
+    global $L;
+    $bridge = new Z2mBridge();
+    $message = "";
+    if (!$bridge->connect()) {
+        $message = $L["Common.NoBroker"];
+    } else {
+        $answer = $bridge->request("backup", array(), 30.0);
+        $bridge->close();
+        if ($answer === null) {
+            $message = $L["Common.NoAnswer"];
+        } elseif (!isset($answer["status"]) || $answer["status"] !== "ok" || !isset($answer["data"]["zip"])) {
+            $message = $L["Backup.Refused"] . " " . (isset($answer["error"]) ? $answer["error"] : "");
+        } else {
+            $zip = base64_decode($answer["data"]["zip"], true);
+            if ($zip === false || substr($zip, 0, 2) !== "PK") {
+                $message = $L["Backup.Refused"];
+            } else {
+                header('Content-Type: application/zip');
+                header('Content-Disposition: attachment; filename="zigbee2mqttng_backup_' . date('Ymd_His') . '.zip"');
+                header('Content-Length: ' . strlen($zip));
+                echo $zip;
+                exit(0);
+            }
+        }
+    }
+    header('Content-Type: text/plain; charset=utf-8', true, 503);
+    echo $message . "\n";
     exit(0);
 }
 

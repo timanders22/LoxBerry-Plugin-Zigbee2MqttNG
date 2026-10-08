@@ -1,37 +1,13 @@
 <?php
-require_once 'include/plugin.php';
-require_once 'include/Z2mBridge.php';
-
 /**
- * Downloads a backup of the zigbee2mqtt data folder as zip. zigbee2mqtt
- * builds it itself on bridge/request/backup: configuration.yaml, devices,
- * database.db, coordinator_backup.json, state.json. It contains the
- * network key and the MQTT credentials.
- * Nothing is changed. On failure a short plain text says why.
+ * Zigbee2MqttNG - bis 4.1.1 der Download der ZIP-Sicherung von zigbee2mqtt; seit 4.2.0
+ * ajax.php?action=backupNetwork, wortgleich. Ein alter Verweis landet im
+ * Reiter Einstellungen, wo der Knopf steht.
+ *
+ * Seit 4.2.0 ein Reiter der Startseite (Entscheidung Nr. 44: gruene Reiter
+ * statt der LoxBerry-Navigationsleiste); vorbereitet wird der Inhalt in
+ * zng_bereiche.php. Diese Datei leitet nur noch um, damit alte Lesezeichen
+ * und Verweise nicht ins Leere laufen.
  */
-$bridge = new Z2mBridge();
-$message = "";
-if (!$bridge->connect()) {
-    $message = $L["Common.NoBroker"];
-} else {
-    $answer = $bridge->request("backup", array(), 30.0);
-    $bridge->close();
-    if ($answer === null) {
-        $message = $L["Common.NoAnswer"];
-    } elseif (!isset($answer["status"]) || $answer["status"] !== "ok" || !isset($answer["data"]["zip"])) {
-        $message = $L["Backup.Refused"] . " " . (isset($answer["error"]) ? $answer["error"] : "");
-    } else {
-        $zip = base64_decode($answer["data"]["zip"], true);
-        if ($zip === false || substr($zip, 0, 2) !== "PK") {
-            $message = $L["Backup.Refused"];
-        } else {
-            header('Content-Type: application/zip');
-            header('Content-Disposition: attachment; filename="zigbee2mqttng_backup_' . date('Ymd_His') . '.zip"');
-            header('Content-Length: ' . strlen($zip));
-            echo $zip;
-            exit(0);
-        }
-    }
-}
-header('Content-Type: text/plain; charset=utf-8', true, 503);
-echo $message . "\n";
+header('Location: index.php?form=settings', true, 302);
+exit;

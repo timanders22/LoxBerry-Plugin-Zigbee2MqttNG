@@ -12,12 +12,12 @@
         display: none;
     }
 
-    .zng-maplegend span {
+    .sm-kartenlegende span {
         margin-right: 1.5em;
         white-space: nowrap;
     }
 
-    .zng-maplegend i {
+    .sm-kartenlegende i {
         display: inline-block;
         width: 12px;
         height: 12px;
@@ -27,16 +27,15 @@
     }
 </style>
 
-<div class="wide">{{ 'Navbar.Devices' | trans }}</div>
-<p><i>{{ 'Devices.Desc' | trans }}</i></p>
+<p class="sm-hilfe">{{ 'Devices.Desc' | trans }}</p>
 {{ m.legende(service.enableUI ? ['lesen', 'technik', 'aktion'] : ['technik', 'aktion']) }}
 
 <!-- ============ Pairing ============ -->
 <h3>{{ 'Devices.PairingTitle' | trans }}</h3>
-<div class="zng-buttons">
+<div class="sm-knopfreihe">
     <!-- acts on the running service right away, nothing is saved -->
-    <button data-role="none" type="button" id="permitjoinopen" class="zng-btn zng-b-aktion">{{ 'Devices.ButtonPairingOpen' | trans }}</button>
-    <button data-role="none" type="button" id="permitjoinclose" class="zng-btn zng-b-aktion">{{ 'Devices.ButtonPairingClose' | trans }}</button>
+    <button data-role="none" type="button" id="permitjoinopen" class="sm-btn sm-b-aktion">{{ 'Devices.ButtonPairingOpen' | trans }}</button>
+    <button data-role="none" type="button" id="permitjoinclose" class="sm-btn sm-b-aktion">{{ 'Devices.ButtonPairingClose' | trans }}</button>
     <span id="permitjoinresult"
         data-open="{{ 'Devices.PairingOpen' | trans }}"
         data-closed="{{ 'Devices.PairingClosed' | trans }}"
@@ -49,9 +48,9 @@
 <p class="hint">{{ 'Devices.HintPairing' | trans }}</p>
 
 {% if service.enableUI %}
-<p class="zng-buttons">
-    <a data-role="none" href="ui.php" class="zng-btn zng-b-lesen" data-ajax="false">{{ 'Devices.UIButton' | trans }}</a>
-    {% if service.frontendAuth and service.frontendToken %}<span class="hint">{{ 'Devices.UIToken' | trans }} <code>{{ service.frontendToken }}</code></span>{% endif %}
+<p class="sm-knopfreihe">
+    <a data-role="none" href="index.php?form=devices&amp;ansicht=ui" class="sm-btn sm-b-lesen" data-ajax="false">{{ 'Devices.UIButton' | trans }}</a>
+    {% if service.frontendAuth and service.frontendToken %}<span class="hint">{{ 'Devices.UIToken' | trans }}</span> {{ m.geheim('uitoken', service.frontendToken) }}{% endif %}
 </p>
 {% endif %}
 
@@ -59,12 +58,12 @@
 <h3>{{ 'Devices.ListTitle' | trans }}</h3>
 <p class="hint">{{ 'Devices.ListDesc' | trans }}</p>
 {% if not hasList %}
-<div class="zng-warning">{{ 'Devices.NoList' | trans }}</div>
+<div class="sm-warnung">{{ 'Devices.NoList' | trans }}</div>
 {% elseif deviceList is empty %}
 <p>{{ 'Devices.Empty' | trans }}</p>
 {% else %}
 <div style="overflow-x:auto">
-    <table class="zng-table">
+    <table class="sm-tbl">
         <tr>
             <th>{{ 'Devices.Name' | trans }}</th>
             <th>{{ 'Devices.Model' | trans }}</th>
@@ -74,15 +73,15 @@
         </tr>
         {% for device in deviceList %}
         <tr>
-            <td><b>{{ device.name }}</b><br><span class="zng-small">{{ device.ieee }}</span>
-                {% if device.reachable is same as(true) %}<br><span class="zng-ok zng-small">{{ 'Devices.Reachable' | trans }}</span>
-                {% elseif device.reachable is same as(false) %}<br><span class="zng-fail zng-small">{{ 'Devices.Unreachable' | trans }}</span>{% endif %}
+            <td><b>{{ device.name }}</b><br><span class="sm-klein">{{ device.ieee }}</span>
+                {% if device.reachable is same as(true) %}<br><span class="sm-ok sm-klein">{{ 'Devices.Reachable' | trans }}</span>
+                {% elseif device.reachable is same as(false) %}<br><span class="sm-fail sm-klein">{{ 'Devices.Unreachable' | trans }}</span>{% endif %}
             </td>
-            <td>{{ device.model }}<br><span class="zng-small">{{ device.description }}</span></td>
-            <td>{{ device.type }}<br><span class="zng-small">{{ device.power }}</span>
-                {% if device.interview != 'SUCCESSFUL' %}<br><span class="zng-hint zng-small">{{ 'Devices.InterviewIncomplete' | trans }} ({{ device.interview }})</span>{% endif %}
-                {% if not device.supported %}<br><span class="zng-hint zng-small">{{ 'Devices.Unsupported' | trans }}</span>{% endif %}
-                {% if device.disabled %}<br><span class="zng-small">{{ 'Devices.Disabled' | trans }}</span>{% endif %}
+            <td>{{ device.model }}<br><span class="sm-klein">{{ device.description }}</span></td>
+            <td>{{ device.type }}<br><span class="sm-klein">{{ device.power }}</span>
+                {% if device.interview != 'SUCCESSFUL' %}<br><span class="sm-hint sm-klein">{{ 'Devices.InterviewIncomplete' | trans }} ({{ device.interview }})</span>{% endif %}
+                {% if not device.supported %}<br><span class="sm-hint sm-klein">{{ 'Devices.Unsupported' | trans }}</span>{% endif %}
+                {% if device.disabled %}<br><span class="sm-klein">{{ 'Devices.Disabled' | trans }}</span>{% endif %}
             </td>
             <td>{{ device.values }}</td>
             {% if showLastSeen %}<td>{{ device.lastSeen }}</td>{% endif %}
@@ -96,8 +95,8 @@
 <!-- ============ Network map ============ -->
 <h3>{{ 'Map.Title' | trans }}</h3>
 <p class="hint">{{ 'Map.Desc' | trans }} {{ 'Map.Hint' | trans }}</p>
-<div class="zng-buttons">
-    <button data-role="none" type="button" id="mapscan" class="zng-btn zng-b-technik">{{ 'Map.Scan' | trans }}</button>
+<div class="sm-knopfreihe">
+    <button data-role="none" type="button" id="mapscan" class="sm-btn sm-b-technik">{{ 'Map.Scan' | trans }}</button>
     <span id="mapstatus"
         data-scanning="{{ 'Map.Scanning' | trans }}"
         data-done="{{ 'Map.Done' | trans }}"
@@ -107,14 +106,14 @@
         data-noanswer="{{ 'Common.NoAnswer' | trans }}"
         data-refused="{{ 'Common.Refused' | trans }}"></span>
 </div>
-<p class="zng-maplegend hint">
+<p class="sm-kartenlegende hint">
     <span><i style="background:#1565c0"></i>{{ 'Map.Coordinator' | trans }}</span>
     <span><i style="background:#6dac20"></i>{{ 'Map.Router' | trans }}</span>
     <span><i style="background:#90a4ae"></i>{{ 'Map.EndDevice' | trans }}</span>
     <span>{{ 'Map.LqiLegend' | trans }}</span>
 </p>
 <div id="devicemap"></div>
-<table class="zng-table" id="maplinks" style="display:none">
+<table class="sm-tbl" id="maplinks" style="display:none">
     <thead>
         <tr>
             <th>{{ 'Map.From' | trans }}</th>
@@ -132,8 +131,8 @@
     <form id="form" onsubmit="return false;">
         <div id="editor">{{ deviceData }}</div>
     </form>
-    <div id="validationerrors" class="zng-error" style="display:none"></div>
-    <div class="zng-center" style="height:16px;min-height:16px">
+    <div id="validationerrors" class="sm-fehler" style="display:none"></div>
+    <div class="sm-mitte" style="height:16px;min-height:16px">
         <span id="savemessages">
             <span class="submitting" style="display: none;">{{ 'Common.Submitting' | trans }}</span>
             <span class="saveok" style="display: none;">{{ 'Common.HintSaveOK' | trans }}</span>
@@ -142,7 +141,7 @@
         </span>
     </div>
     {{ m.diensttexte() }}
-    <div class="zng-center">
-        <button data-role="none" type="button" class="zng-btn zng-b-aktion" id="saveapply">{{ 'Common.SaveApply' | trans }}</button>
+    <div class="sm-mitte">
+        <button data-role="none" type="button" class="sm-btn sm-b-aktion" id="saveapply">{{ 'Common.SaveApply' | trans }}</button>
     </div>
 </div>

@@ -1,20 +1,11 @@
 <?php
-require_once 'include/plugin.php';
-require_once LBPBINDIR . '/zigbee2mqttng.php';
-
-$twig = Plugin::initializeTwig();
-
-// Include header and set page as active
-Plugin::createHeader(Plugin::MQTT);
-
-//mqtt is not a plugin anymore in lb >=3
-$mqtt_installed = (int) substr(LBSystem::lbversion(), 0, 1) > 2 || LBSystem::plugindata('mqttgateway');
-
-echo $twig->render('mqtt.html', array(
-    "konfig" => zng_konfig_anzeige(),
-    "mqtt_installed" => $mqtt_installed,
-    "gateway" => zng_gateway_info(),
-));
-
-//creates the footer
-LBWeb::lbfooter();
+/**
+ * Zigbee2MqttNG - bis 4.1.1 die Seite "MQTT".
+ *
+ * Seit 4.2.0 ein Reiter der Startseite (Entscheidung Nr. 44: gruene Reiter
+ * statt der LoxBerry-Navigationsleiste); vorbereitet wird der Inhalt in
+ * zng_bereiche.php. Diese Datei leitet nur noch um, damit alte Lesezeichen
+ * und Verweise nicht ins Leere laufen.
+ */
+header('Location: index.php?form=mqtt', true, 302);
+exit;

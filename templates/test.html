@@ -1,5 +1,5 @@
 <style>
-    .zng-status td.zng-mark {
+    .sm-pruefung td.sm-marke {
         width: 1.5em;
         font-weight: bold;
         text-align: center;
@@ -7,21 +7,20 @@
 </style>
 
 {% import 'macros.html' as m %}
-<div class="wide">{{ 'Navbar.Test' | trans }}</div>
-<p><i>{{ 'Test.Desc' | trans }}</i></p>
+<p class="sm-hilfe">{{ 'Test.Desc' | trans }}</p>
 {{ m.legende(['lesen']) }}
 
 <p class="hint">
-    <span class="zng-ok">&#10004;</span> {{ 'Test.LegendOk' | trans }} &nbsp;
-    <span class="zng-fail">&#10008;</span> {{ 'Test.LegendFail' | trans }} &nbsp;
-    <span class="zng-hint">!</span> {{ 'Test.LegendHint' | trans }} &nbsp;
-    <span class="zng-info">i</span> {{ 'Test.LegendInfo' | trans }}
+    <span class="sm-ok">&#10004;</span> {{ 'Test.LegendOk' | trans }} &nbsp;
+    <span class="sm-fail">&#10008;</span> {{ 'Test.LegendFail' | trans }} &nbsp;
+    <span class="sm-hint">!</span> {{ 'Test.LegendHint' | trans }} &nbsp;
+    <span class="sm-info">i</span> {{ 'Test.LegendInfo' | trans }}
 </p>
 
-<table class="zng-table zng-status">
+<table class="sm-tbl sm-pruefung">
     {% for row in rows %}
     <tr>
-        <td class="zng-mark zng-{{ row.state }}">
+        <td class="sm-marke sm-{{ row.state }}">
             {% if row.state == 'ok' %}&#10004;{% elseif row.state == 'fail' %}&#10008;{% elseif row.state == 'hint' %}!{% else %}i{% endif %}
         </td>
         <td>{{ row.label | trans }}</td>
@@ -30,7 +29,7 @@
     {% endfor %}
 </table>
 
-<div class="zng-center" style="gap:1em;margin-top:1em">
+<div class="sm-mitte" style="gap:1em;margin-top:1em">
     <span class="hint">{{ 'Test.Updated' | trans }} {{ time }}</span>
-    <a data-role="none" href="test.php" class="zng-btn zng-b-lesen" data-ajax="false">{{ 'Test.Refresh' | trans }}</a>
+    <a data-role="none" href="index.php?form=test" class="sm-btn sm-b-lesen" data-ajax="false">{{ 'Test.Refresh' | trans }}</a>
 </div>

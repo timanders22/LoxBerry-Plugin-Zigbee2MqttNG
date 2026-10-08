@@ -8,6 +8,26 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.0
+
+* **Eine Seite mit grünen Reitern** wie in den übrigen Plugins des Hauses, statt der LoxBerry-Navigationsleiste
+  mit sechs Einzelseiten. Über den Reitern steht eine **Statusübersicht** (Dienst zigbee2mqttng, Koordinator,
+  erreichbare Geräte, MQTT-Weg), oben im Reiter Einstellungen ein Kasten mit der Kurzbeschreibung des Plugins.
+* Alte Adressen und Lesezeichen (`devices.php`, `mqtt.php`, `ui.php`, `loxone.php`, `test.php`, `log.php`,
+  `backup.php`) leiten auf den passenden Reiter um.
+* Knopffarben, Legende und Tabellen nach dem Hausstandard; die Auswahlfelder zeigen einen Pfeil. Die Formulare
+  (Einstellungen, MQTT) stehen in der Hausform: Beschriftung über dem Feld, Hilfe darunter, kleine
+  Kontrollkästchen. Das Token der Zigbee2mqtt UI erscheint maskiert, ein Knopf deckt es zum Kopieren auf.
+* Der Reiter Test prüft zusätzlich, ob Reiterleiste, Bereiche und Liste der Reiter zusammenpassen.
+* **`erreichbar` kommt nach dem Anlernen in Loxone an.** Ändert sich die Geräteliste, schreibt das Plugin die
+  Abo-Liste des MQTT-Gateways neu; das Gateway meldet dabei alle Abos ab und einige Sekunden später wieder an.
+  Die Meldung `erreichbar` = 1 beim Anlernen fiel in diese Lücke, und in Loxone blieb 0 stehen. Jetzt wird der
+  Stand aller Geräte 30 s nach der letzten Änderung und zusätzlich alle 15 Minuten erneut gesendet (nicht
+  retained).
+* Die Funktionen sind unverändert: Speichern, Anlernen, Geräteliste, Netzwerkkarte, `devices.yaml`, Sicherung,
+  Einbindung in Loxone, Test und Logdateien arbeiten wie in 4.1.1; die Zigbee2mqtt UI ist eine Ansicht im Reiter
+  Geräte. Jeder Reiterwechsel lädt die Seite neu – aufgebaut wird nur der offene Reiter.
+
 ## Neu in 4.1.1
 
 * **Konfiguration geht nicht mehr verloren.** Ist `mqtt.json`, `service.json` oder `configuration.yaml` vorhanden, aber
@@ -68,8 +88,9 @@ ein Vorgänger noch installiert ist.
 
 ## Reiter
 
-Die Oberfläche folgt dem Hausstandard: **Einstellungen**, **MQTT**, **Einbindung in Loxone**, **Test**,
-**Logdateien** – dazu, wie „Geräte anlernen“ bei Matter2Lox, der Reiter **Geräte**.
+Die Oberfläche ist eine Seite mit grünen Reitern nach dem Hausstandard: **Einstellungen**, **Geräte** (wie
+„Geräte anlernen“ bei Matter2Lox), **MQTT**, **Einbindung in Loxone**, **Test**, **Logdateien**. Darüber steht
+eine Statusübersicht: Dienst, Koordinator, erreichbare Geräte, MQTT.
 
 | Reiter | Inhalt |
 |---|---|

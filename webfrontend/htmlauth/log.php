@@ -1,15 +1,11 @@
 <?php
-require_once 'include/plugin.php';
-require_once "loxberry_log.php";
-require_once "loxberry_web.php";
-
-$twig = Plugin::initializeTwig();
-
-// Include header and set page as active
-Plugin::createHeader(Plugin::LOG);
-
-$loglist_html = file_get_contents("http://localhost:" . lbwebserverport() . "/admin/system/logmanager.cgi?package=" .  urlencode($lbpplugindir) . "&header=none");
-echo $twig->render('log.html', array("loglist" => $loglist_html, "logfile" => LBPLOGDIR . "/zigbee2mqtt.log"));
-
-//creates the footer
-LBWeb::lbfooter();
+/**
+ * Zigbee2MqttNG - bis 4.1.1 die Seite "Logdateien".
+ *
+ * Seit 4.2.0 ein Reiter der Startseite (Entscheidung Nr. 44: gruene Reiter
+ * statt der LoxBerry-Navigationsleiste); vorbereitet wird der Inhalt in
+ * zng_bereiche.php. Diese Datei leitet nur noch um, damit alte Lesezeichen
+ * und Verweise nicht ins Leere laufen.
+ */
+header('Location: index.php?form=log', true, 302);
+exit;

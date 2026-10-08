@@ -28,6 +28,9 @@
 //    erreichbar and the device values keep their last value in Loxone when
 //    zigbee2mqtt dies; only the heartbeat stops. A retained heartbeat would
 //    say "alive" for a dead service (house rule Regeln/07).
+//  - 4.2.0 (Z2MNG-E1): sends erreichbar of all devices again 30 s after
+//    the gateway files changed and every 15 minutes, never retained -
+//    see ERREICHBAR_NACH_MS.
 //
 // Do not edit the copy in data/external_extensions - it is overwritten.
 
@@ -47,6 +50,19 @@ const NOTIFY_DELAY_MS = 60000;
 // templates in bin/zigbee2mqttng.php
 export const HEARTBEAT_TOPIC = "zigbee2mqttng";
 const HEARTBEAT_MS = 60000;
+// Z2MNG-E1 (4.2.0, measured on the device 09.10.2026): when the gateway
+// files change, the MQTT gateway unsubscribes all topics and subscribes
+// again ~10 s later. An erreichbar sent in that gap (it is sent when a
+// device joins - exactly when the files change) is lost, and Loxone keeps
+// the old 0. 30 s after the LAST change the current erreichbar of every
+// device is sent again; every further change moves the time on.
+const ERREICHBAR_NACH_MS = 30000;
+// ... and with every 15th heartbeat (15 min): a restart of the gateway or
+// of the LoxBerry changes no file. Not every minute - that would push one
+// message per device and minute through broker and gateway for a state
+// that rarely changes. Not retained, as before: zigbee2mqtt states it,
+// a retained 1 would outlive a dead service (Regeln/07).
+export const ERREICHBAR_TAKT = 15;
 
 function readJson(file, fallback) {
     try {
@@ -211,6 +227,7 @@ export default class Zigbee2MqttNGExtension {
         this.heartbeatTimer = null;
         this.heartbeatCount = 0;
         this.heartbeat = null;
+        this.erreichbarTimer = null;
     }
 
     async start() {
@@ -256,6 +273,8 @@ export default class Zigbee2MqttNGExtension {
     async stop() {
         clearInterval(this.heartbeatTimer);
         this.heartbeatTimer = null;
+        clearTimeout(this.erreichbarTimer);
+        this.erreichbarTimer = null;
         clearTimeout(this.foreignTimer);
         clearTimeout(this.notifyTimer);
         this.flushNotifications();
@@ -287,6 +306,9 @@ export default class Zigbee2MqttNGExtension {
         const options = {clientOptions: {retain: false}, skipLog: true};
         await this.mqtt.publish(`${HEARTBEAT_TOPIC}/ts`, String(ts), options);
         await this.mqtt.publish(`${HEARTBEAT_TOPIC}/zaehler`, String(zaehler), options);
+        if (zaehler > 0 && zaehler % ERREICHBAR_TAKT === 0) {
+            await this.erreichbarNachsenden();
+        }
     }
 
     onPublished(data) {
@@ -349,10 +371,44 @@ export default class Zigbee2MqttNGExtension {
         changed = writeIfChanged(this.cfg.resetFile, resetLines(this.base, this.devices)) || changed;
         if (changed) {
             this.logger.info("Zigbee2MqttNG: MQTT gateway subscriptions updated");
+            this.erreichbarSpaeter();
         }
     }
 
     // ---------------- availability -> erreichbar ----------------
+
+    // Z2MNG-E1: send erreichbar of all devices again ERREICHBAR_NACH_MS after
+    // the last change of the gateway files (debounced)
+    erreichbarSpaeter() {
+        clearTimeout(this.erreichbarTimer);
+        this.erreichbarTimer = setTimeout(() => {
+            this.erreichbarTimer = null;
+            this.erreichbarNachsenden().catch((e) => this.logger.warning(`Zigbee2MqttNG: ${e}`));
+        }, ERREICHBAR_NACH_MS);
+    }
+
+    // The last state zigbee2mqtt reported (the availability file the device
+    // list reads), only for devices whose erreichbar is subscribed at the
+    // gateway (stateDevices, as in subscriptionLines). No notification, not
+    // logged, not retained. Returns the number of messages.
+    async erreichbarNachsenden() {
+        if (!this.cfg.availability || this.devices === null) {
+            return 0;
+        }
+        this.availability = this.availability ?? readJson(this.cfg.availabilityFile, {});
+        let n = 0;
+        for (const device of stateDevices(this.devices)) {
+            const online = this.availability[device.friendly_name];
+            if (typeof online !== "boolean") {
+                continue;
+            }
+            await this.mqtt.publish(`${device.friendly_name}/erreichbar`, online ? "1" : "0",
+                {clientOptions: {retain: false}, skipLog: true});
+            n++;
+        }
+        return n;
+    }
+
 
     async onAvailability(name, raw) {
         if (!this.cfg.availability || !topicOk(name)) {

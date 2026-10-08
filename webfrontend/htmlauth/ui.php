@@ -1,13 +1,11 @@
 <?php
-require_once 'include/plugin.php';
-require_once 'model/ServiceConfig.php';
-
-$twig = Plugin::initializeTwig();
-
-// The zigbee2mqtt UI belongs to the Devices tab
-Plugin::createHeader(Plugin::DEVICES);
-$serviceCfg = ServiceConfig::load();
-$port = (int) $serviceCfg->frontendPort > 0 ? (int) $serviceCfg->frontendPort : 8881;
-echo $twig->render('ui.html', array("port" => $port, "service" => $serviceCfg));
-//creates the footer
-LBWeb::lbfooter();
+/**
+ * Zigbee2MqttNG - bis 4.1.1 die Seite mit der Zigbee2mqtt UI (Reiter Geraete).
+ *
+ * Seit 4.2.0 ein Reiter der Startseite (Entscheidung Nr. 44: gruene Reiter
+ * statt der LoxBerry-Navigationsleiste); vorbereitet wird der Inhalt in
+ * zng_bereiche.php. Diese Datei leitet nur noch um, damit alte Lesezeichen
+ * und Verweise nicht ins Leere laufen.
+ */
+header('Location: index.php?form=devices&ansicht=ui', true, 302);
+exit;
