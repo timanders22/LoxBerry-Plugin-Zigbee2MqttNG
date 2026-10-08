@@ -115,26 +115,74 @@ class ServiceConfig {
      * Checks the values. Returns a list of language keys of the errors.
      */
     public function validate() {
+        $daten = get_object_vars($this);
         $errors = array();
-        if (!preg_match('/^[1-9][0-9]{0,4}$/', (string) $this->frontendPort) || (int) $this->frontendPort > 65535) {
-            $errors[] = "ServiceConfig.ValFrontendPort";
-        }
-        if ((string) $this->adapter !== "" && !in_array($this->adapter, self::ADAPTERS, true)) {
-            $errors[] = "ServiceConfig.ValAdapter";
-        }
-        if ((string) $this->baudrate !== "" && !preg_match('/^[0-9]{3,7}$/', (string) $this->baudrate)) {
-            $errors[] = "ServiceConfig.ValBaudrate";
-        }
-        if ((string) $this->channel !== "" && ((int) $this->channel < 11 || (int) $this->channel > 26)) {
-            $errors[] = "ServiceConfig.ValChannel";
-        }
-        if (!preg_match('/^[0-9]{1,2}$/', (string) $this->batteryThreshold) || (int) $this->batteryThreshold < 1) {
-            $errors[] = "ServiceConfig.ValBattery";
-        }
-        if ((string) $this->port !== "" && !preg_match('#^(/dev/[A-Za-z0-9/_.:\-]+|tcp://[A-Za-z0-9.\-]+:[0-9]{1,5}|mdns://[A-Za-z0-9.\-]+)$#', (string) $this->port)) {
-            $errors[] = "ServiceConfig.ValPort";
+        foreach ($daten as $key => $value) {
+            list($ok, $result) = self::wert($key, $value, $daten);
+            if (!$ok && !in_array($result, $errors, true)) {
+                $errors[] = $result;
+            }
         }
         return $errors;
+    }
+
+    /**
+     * 4.1.1 (B11): checks one value. Returns array(true, normalised value)
+     * or array(false, language key of the error). The type is checked
+     * before the pattern, every pattern ends with \z; a channel "15.7" or a
+     * flow control "maybe" is rejected, not turned into 15 or false.
+     */
+    public static function wert($key, $value, $daten) {
+        switch ($key) {
+            case "enableUI":
+            case "frontendAuth":
+            case "availability":
+            case "notifyOffline":
+            case "notifyBattery":
+                $b = zng_haken($value);
+                return $b === null ? array(false, "ServiceConfig.ValSwitch") : array(true, $b);
+            case "port":
+                $ok = $value === "" || (is_string($value) && preg_match('#^(/dev/[A-Za-z0-9/_.:\-]{1,200}|tcp://[A-Za-z0-9.\-]{1,253}:[0-9]{1,5}|mdns://[A-Za-z0-9.\-]{1,253})\z#', $value));
+                return $ok ? array(true, $value) : array(false, "ServiceConfig.ValPort");
+            case "adapter":
+                return $value === "" || in_array($value, self::ADAPTERS, true) ? array(true, $value) : array(false, "ServiceConfig.ValAdapter");
+            case "baudrate":
+                if ($value === "") {
+                    return array(true, "");
+                }
+                $baud = zng_zahl_text($value, 100, 9999999, '/^[0-9]{3,7}\z/');
+                return $baud === null ? array(false, "ServiceConfig.ValBaudrate") : array(true, $baud);
+            case "rtscts":
+                // three ways: "" leaves configuration.yaml alone; a true/false
+                // of an older version is kept with the same meaning
+                if (is_bool($value)) {
+                    return array(true, $value ? "true" : "false");
+                }
+                return in_array($value, array("", "true", "false"), true) ? array(true, $value) : array(false, "ServiceConfig.ValRtscts");
+            case "frontendPort":
+                $port = zng_zahl_text($value, 1, 65535, '/^[1-9][0-9]{0,4}\z/');
+                return $port === null ? array(false, "ServiceConfig.ValFrontendPort") : array(true, $port);
+            case "frontendToken":
+                return $value === "" || (is_string($value) && preg_match('/^[A-Za-z0-9]{16,64}\z/', $value))
+                    ? array(true, $value) : array(false, "ServiceConfig.ValToken");
+            case "channel":
+                if ($value === "") {
+                    return array(true, "");
+                }
+                $channel = zng_zahl_text($value, 11, 26, '/^(1[1-9]|2[0-6])\z/');
+                return $channel === null ? array(false, "ServiceConfig.ValChannel") : array(true, $channel);
+            case "batteryThreshold":
+                $level = zng_zahl_text($value, 1, 99, '/^[1-9][0-9]?\z/');
+                return $level === null ? array(false, "ServiceConfig.ValBattery") : array(true, $level);
+        }
+        return array(false, "Common.UnknownKey");
+    }
+
+    /**
+     * 4.1.1 (B1): state of service.json - "fehlt", "ok" or "kaputt"
+     */
+    public static function lage() {
+        return zng_json_lage(LBPCONFIGDIR . "/service.json");
     }
 
     /**
@@ -145,11 +193,18 @@ class ServiceConfig {
     }
 
     /**
-     * Saves the config
+     * Saves the config. Returns false if it could not be written (the old
+     * file is kept then).
      */
     public function save() {
+        // 4.1.1 (B4): in one piece and 0600 (token of the zigbee2mqtt UI);
+        // the second copy follows a readable state only
         $configfile = LBPCONFIGDIR . "/service.json";
-        file_put_contents($configfile, $this->toJson());
+        if (!zng_schreiben_wenn_anders($configfile, $this->toJson(), ZNG_MODUS_GEHEIM)) {
+            return false;
+        }
+        zng_zweitschrift_ziehen($configfile, "json", LBPCONFIGDIR, "service.json");
+        return true;
     }
 
     /**

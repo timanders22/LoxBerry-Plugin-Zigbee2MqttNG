@@ -102,7 +102,126 @@ function statusRows()
     }
     $rows = array_merge($rows, gatewayRows($mqttcfg));
     $rows[] = hausRow($mqttcfg);
+    // 4.1.1
+    $rows[] = heartbeatRow($status, $service["pid"]);
+    $rows = array_merge($rows, konfigRows());
+    $rows[] = vorlagenRow();
     return $rows;
+}
+
+/**
+ * 4.1.1 (B7): the heartbeat for Loxone. The extension writes the last one
+ * into its status file; this line says whether it is fresh. It measures the
+ * extension, not the arrival at the Miniserver.
+ */
+function heartbeatRow($status, $pid)
+{
+    global $L;
+    $hb = isset($status["heartbeat"]) && is_array($status["heartbeat"]) ? $status["heartbeat"] : array();
+    if (!isset($hb["ts"]) || !is_numeric($hb["ts"])) {
+        return statusRow("Test.Heartbeat", $pid > 0 ? "fail" : "info", $L["Test.HeartbeatNie"]);
+    }
+    $alter = time() - (int) $hb["ts"];
+    $text = sprintf($L["Test.HeartbeatAlter"], $alter, isset($hb["zaehler"]) ? (int) $hb["zaehler"] : -1);
+    if ($alter <= 150) {
+        return statusRow("Test.Heartbeat", "ok", $text);
+    }
+    return statusRow("Test.Heartbeat", $pid > 0 ? "fail" : "info", $text);
+}
+
+/**
+ * 4.1.1 (B1-B4): are the configuration files readable, is there a second
+ * copy, are they for loxberry only (0600)? Read only - nothing is healed
+ * here, so the line shows the state as it is.
+ */
+function konfigRows()
+{
+    global $L;
+    $rows = array();
+    $anzeige = zng_konfig_anzeige();
+    $kaputt = array();
+    $alt = array();
+    $ohneZweitschrift = array();
+    $offen = array();
+    foreach ($anzeige["dateien"] as $d) {
+        if ($d["lage"] === "kaputt") {
+            $kaputt[] = $d["name"];
+        } elseif ($d["kaputt"] !== "") {
+            $alt[] = $d["kaputt"];
+        }
+        if ($d["lage"] === "ok" && !$d["zweitschrift"]) {
+            $ohneZweitschrift[] = $d["name"];
+        }
+        if (is_file($d["datei"]) && (fileperms($d["datei"]) & 0077) !== 0) {
+            $offen[] = $d["name"] . " " . substr(sprintf("%o", fileperms($d["datei"])), -4);
+        }
+    }
+    if ($kaputt) {
+        $rows[] = statusRow("Test.Konfig", "fail", sprintf($L["Test.KonfigKaputt"], implode(", ", $kaputt)));
+    } elseif ($anzeige["sperre"] !== "") {
+        $rows[] = statusRow("Test.Konfig", "fail", sprintf($L["Test.KonfigSperre"], $anzeige["sperre"]));
+    } elseif ($alt) {
+        $rows[] = statusRow("Test.Konfig", "hint", sprintf($L["Test.KonfigAlt"], implode(", ", $alt)));
+    } else {
+        $rows[] = statusRow("Test.Konfig", "ok", $L["Test.KonfigOk"]);
+    }
+    $rows[] = $ohneZweitschrift
+        ? statusRow("Test.Zweitschrift", "hint", sprintf($L["Test.ZweitschriftFehlt"], implode(", ", $ohneZweitschrift)))
+        : statusRow("Test.Zweitschrift", "ok", sprintf($L["Test.ZweitschriftOk"], $anzeige["zweitschriftOrdner"]));
+    $rows[] = $offen
+        ? statusRow("Test.Rechte", "fail", sprintf($L["Test.RechteOffen"], implode(", ", $offen)))
+        : statusRow("Test.Rechte", "ok", $L["Test.RechteOk"]);
+    return $rows;
+}
+
+/**
+ * 4.1.1 (B9): every template the tab Einbindung in Loxone offers is built
+ * and parsed here: well-formed, every Comment 40 characters or less, no
+ * title twice. Says how many commands were checked.
+ */
+function vorlagenRow()
+{
+    global $L;
+    $gateway = zng_gateway_info();
+    $arten = array("out");
+    if ($gateway["use_http"]) {
+        $arten[] = "inhttp";
+    }
+    if ($gateway["use_udp"] && $gateway["udpport"] > 0) {
+        $arten[] = "in";
+    }
+    $befehle = 0;
+    $fehler = array();
+    foreach ($arten as $art) {
+        list($datei, $xml) = zng_vorlage($art, "");
+        if ($datei === null) {
+            $fehler[] = $art . ": " . $xml;
+            continue;
+        }
+        $doc = @simplexml_load_string($xml);
+        if ($doc === false) {
+            $fehler[] = $datei . ": XML";
+            continue;
+        }
+        $titel = array();
+        foreach ($doc->children() as $cmd) {
+            if ($cmd->getName() === "Info") {
+                continue;
+            }
+            $befehle++;
+            $titel[] = (string) $cmd["Title"];
+            if (zng_laenge((string) $cmd["Comment"]) > 40) {
+                $fehler[] = $datei . ": Comment > 40 (" . (string) $cmd["Title"] . ")";
+            }
+        }
+        if (count($titel) !== count(array_unique($titel))) {
+            $fehler[] = $datei . ": " . $L["Test.VorlageDoppelt"];
+        }
+    }
+    if ($fehler) {
+        return statusRow("Test.Vorlage", "fail", implode("; ", $fehler));
+    }
+    return statusRow("Test.Vorlage", "ok", sprintf($L["Test.VorlageOk"], count($arten), $befehle));
 }
 
 /**

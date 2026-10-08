@@ -16,23 +16,80 @@
 </div>
 {% endmacro %}
 
+{# 4.1.1 (Q1): colour legend of the buttons, one per tab, with exactly the
+   colours used on that tab: lesen (green), technik (grey), aktion (orange) #}
+{% macro legende(farben) %}
+<div class="zng-legende">
+    {% if 'lesen' in farben %}<span><i class="zng-punkt zng-b-lesen"></i> {{ 'Legende.Lesen' | trans }}</span>{% endif %}
+    {% if 'technik' in farben %}<span><i class="zng-punkt zng-b-technik"></i> {{ 'Legende.Technik' | trans }}</span>{% endif %}
+    {% if 'aktion' in farben %}<span><i class="zng-punkt zng-b-aktion"></i> {{ 'Legende.Aktion' | trans }}</span>{% endif %}
+</div>
+{% endmacro %}
+
+{# 4.1.1 (B10): texts for the answer of a restart, read by common.js #}
+{% macro diensttexte() %}
+<span id="dienstmeldungen" style="display:none"
+    data-laeuft="{{ 'Dienst.Laeuft' | trans }}"
+    data-laeuftnicht="{{ 'Dienst.LaeuftNicht' | trans }}"
+    data-gesperrt="{{ 'Dienst.Gesperrt' | trans }}"
+    data-angehalten="{{ 'Dienst.Angehalten' | trans }}"
+    data-nichtangehalten="{{ 'Dienst.NichtAngehalten' | trans }}"
+    data-gespeichert="{{ 'Dienst.Gespeichert' | trans }}"
+    data-unbekannt="{{ 'Dienst.Unbekannt' | trans }}"></span>
+{% endmacro %}
+
 {# Save button with the messages above it #}
 {% macro savebutton() %}
+{% import _self as me %}
 <div id="validationerrors" class="zng-error" style="display:none" data-title="{{ 'Common.ValidationError' | trans }}"></div>
-<div class="zng-center" style="height:16px;min-height:16px">
+<div class="zng-center" style="min-height:16px">
     <span id="savemessages">
         <span class="submitting" style="display: none;">{{ 'Common.Submitting' | trans }}</span>
         <span class="saveok" style="display: none;">{{ 'Common.HintSaveOK' | trans }}</span>
         <span class="saveerror" style="display: none;">{{ 'Common.HintSaveError' | trans }}</span>
+        <span class="savedienst"></span>
     </span>
 </div>
+{{ me.diensttexte() }}
 <div class="zng-center">
-    <button class="ui-btn ui-btn-icon-right" id="saveapply" data-inline="true">{{ 'Common.SaveApply' | trans }}</button>
+    <button data-role="none" class="zng-btn zng-b-aktion" id="saveapply" type="button">{{ 'Common.SaveApply' | trans }}</button>
 </div>
 <div class="zng-center">
     <span style="display:none" id="service_running">{{ 'Common.ServiceRunning' | trans }} (PID <span id="servicepid">0</span>)</span>
     <span style="display:none" id="service_not_running">{{ 'Common.ServiceNotRunning' | trans }}</span>
 </div>
+{% endmacro %}
+
+{# 4.1.1 (B14): start (green), restart and stop (orange); the answer says
+   what happened, measured afterwards #}
+{% macro dienstknoepfe() %}
+<h3>{{ 'Dienst.Titel' | trans }}</h3>
+<div class="zng-buttons">
+    <button data-role="none" type="button" class="zng-btn zng-b-lesen zng-dienst" data-tat="start">{{ 'Dienst.Start' | trans }}</button>
+    <button data-role="none" type="button" class="zng-btn zng-b-aktion zng-dienst" data-tat="restart">{{ 'Dienst.Neustart' | trans }}</button>
+    <button data-role="none" type="button" class="zng-btn zng-b-aktion zng-dienst" data-tat="stop">{{ 'Dienst.Anhalten' | trans }}</button>
+    <span id="dienstergebnis" data-laeuft-schon="{{ 'Dienst.Arbeitet' | trans }}"></span>
+</div>
+<p class="hint">{{ 'Dienst.Hinweis' | trans }}</p>
+{% endmacro %}
+
+{# 4.1.1 (B1, B2): configuration files that cannot be read, start block #}
+{% macro konfiglage(k) %}
+{% for d in k.dateien %}
+{% if d.lage == 'kaputt' %}
+<div class="zng-error">
+    <b>{{ 'Konfig.KaputtTitel' | trans | replace({'%s': d.name}) }}</b><br>
+    {{ 'Konfig.KaputtText' | trans | replace({'%s': d.datei}) }}
+    {% if d.kaputt %}<br>{{ 'Konfig.KaputtKopie' | trans }} <code>{{ d.kaputt }}</code>{% endif %}
+    <br>{% if d.name == 'configuration.yaml' %}{{ 'Konfig.KaputtYaml' | trans }}{% else %}{{ 'Konfig.KaputtJson' | trans }}{% endif %}
+</div>
+{% elseif d.kaputt %}
+<div class="zng-warning">{{ 'Konfig.AlteKaputt' | trans | replace({'%s': d.name}) }} <code>{{ d.kaputt }}</code></div>
+{% endif %}
+{% endfor %}
+{% if k.sperre %}
+<div class="zng-error"><b>{{ 'Konfig.SperreTitel' | trans }}</b><br>{{ 'Konfig.SperreText' | trans | replace({'%s': k.sperre}) }}</div>
+{% endif %}
 {% endmacro %}
 
 {# Warning for every predecessor plugin that is still installed #}

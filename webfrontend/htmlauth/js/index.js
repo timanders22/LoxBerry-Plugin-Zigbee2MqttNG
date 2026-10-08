@@ -136,10 +136,70 @@ function testPort() {
         });
 }
 
+/**
+ * 4.1.1 (B14): start, restart, stop - the answer is measured afterwards
+ */
+function serviceAction(button) {
+    const result = $("#dienstergebnis");
+    $(".zng-dienst").prop("disabled", true);
+    result.css("color", "grey").text(result.data("laeuft-schon"));
+    $.post(`ajax.php?action=serviceAction`, { tat: $(button).data("tat") }, null, "json")
+        .done(function (answer) {
+            result.css("color", answer && answer.ok ? "green" : "red").text(dienstText(answer));
+        })
+        .fail(function () {
+            result.css("color", "red").text(dienstText(null));
+        })
+        .always(function () {
+            $(".zng-dienst").prop("disabled", false);
+            getPid();
+        });
+}
+
+/**
+ * 4.1.1 (B3): "Einstellungen zurückspielen" - the file goes to the backend,
+ * which checks every value; a half valid file changes nothing
+ */
+function restoreSettings() {
+    const box = $("#sicherungergebnis");
+    const file = $("#sicherungdatei")[0].files[0];
+    if (!file) {
+        box.attr("class", "zng-error").text(box.data("keinedatei")).show();
+        return;
+    }
+    const data = new FormData();
+    data.append("sicherung", file);
+    box.attr("class", "").css("color", "grey").text("...").show();
+    $.ajax({ url: `ajax.php?action=restoreSettings`, type: "POST", data: data, processData: false, contentType: false, dataType: "json" })
+        .done(function (answer) {
+            box.css("color", "");
+            if (answer && answer.result) {
+                let text = box.data("ok") + " " + (answer.teile || []).join(", ") + ".";
+                if (answer.fehlend > 0) {
+                    text += " " + String(box.data("fehlend")).replace("%d", answer.fehlend);
+                }
+                box.attr("class", answer.ok ? "zng-warning" : "zng-error").text(text + " " + dienstText(answer));
+            } else {
+                const list = $("<ul>");
+                ((answer && answer.errors) || []).forEach(function (e) {
+                    list.append($("<li>").text(e));
+                });
+                box.attr("class", "zng-error").empty().append($("<b>").text(box.data("abgelehnt"))).append(list);
+            }
+        })
+        .fail(function () {
+            box.attr("class", "zng-error").text(dienstText(null));
+        });
+}
+
 $(document).ready(function () {
     $("#saveapply").click(function () {
         saveAndApply(["ServiceConfig"]);
     });
+    $(".zng-dienst").click(function () {
+        serviceAction(this);
+    });
+    $("#sicherungladen").click(restoreSettings);
     $("#coordinatorPreset").change(applyPreset);
     $("#testport").click(testPort);
     $("#ServiceConfig\\[port\\]").on("input change", checkPort);

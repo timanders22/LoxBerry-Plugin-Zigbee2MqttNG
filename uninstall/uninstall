@@ -33,6 +33,21 @@ PVERSION=$4   # Forth argument is Plugin version
 #LBHOMEDIR=$5 # Comes from /etc/environment now. Fifth argument is
               # Base folder of LoxBerry
 
+# 4.1.1 (P1): LoxBerry runs every data/system/uninstall/<name>* when a
+# plugin is uninstalled (plugininstall.pl, glob "$pname*") and passes the
+# NAME and folder of THAT plugin. Uninstalling the original zigbee2mqtt
+# therefore ran this script and removed the zigbee2mqttng service and
+# /opt/zigbee2mqttng (measured on a LoxBerry, 08.10.2026). Only act for
+# this plugin; without a name (run by hand) it works as before.
+if [ -n "$PSHNAME" ] && [ "$PSHNAME" != "zigbee2mqttng" ]; then
+    echo "<INFO> Zigbee2MqttNG: this call is for the plugin '$PSHNAME', not for Zigbee2MqttNG - nothing to do."
+    exit 0
+fi
+if [ -n "$PDIR" ] && [ "$PDIR" != "zigbee2mqttng" ]; then
+    echo "<INFO> Zigbee2MqttNG: folder '$PDIR' is not the own one - nothing to do."
+    exit 0
+fi
+
 # Combine them with /etc/environment
 PCGI=$LBPCGI/$PDIR
 PHTML=$LBPHTML/$PDIR
@@ -44,22 +59,21 @@ PSBIN=$LBPSBIN/$PDIR
 PBIN=$LBPBIN/$PDIR
 
 echo "<INFO> Command is: $COMMAND"
-echo "<INFO> Temporary folder is: $TEMPDIR"
+echo "<INFO> Temporary folder is: $PTEMPDIR"
 echo "<INFO> (Short) Name is: $PSHNAME"
-echo "<INFO> Installation folder is: $ARGV3"
-echo "<INFO> Plugin version is: $ARGV4"
-echo "<INFO> Plugin CGI folder is: $PCGI"
+echo "<INFO> Installation folder is: $PDIR"
+echo "<INFO> Plugin version is: $PVERSION"
 echo "<INFO> Plugin HTML folder is: $PHTML"
 echo "<INFO> Plugin Template folder is: $PTEMPL"
 echo "<INFO> Plugin Data folder is: $PDATA"
 echo "<INFO> Plugin Log folder (on RAMDISK!) is: $PLOG"
 echo "<INFO> Plugin CONFIG folder is: $PCONFIG"
-echo "<INFO> Plugin SBIN folder is: $PSBIN"
 echo "<INFO> Plugin BIN folder is: $PBIN"
 
 echo "<INFO> Stopping service if already running"
 if [ -e  /etc/systemd/system/zigbee2mqttng.service ]; then
-	systemctl stop zigbee2mqttng
+	# 4.1.1 (B12): a hanging zigbee2mqtt must not hang the uninstall
+	timeout 60 systemctl stop zigbee2mqttng || echo "<WARNING> zigbee2mqttng did not stop within 60 s"
     systemctl disable zigbee2mqttng
     unlink /etc/systemd/system/zigbee2mqttng.service
     systemctl daemon-reload
@@ -75,6 +89,43 @@ done
 if [ -f "$PDATA/zigbee2mqttng_haus.json" ] && [ -f "$PBIN/clear-haus-topics.php" ]; then
     echo "<INFO> Removing haus/tuer topics"
     php "$PBIN/clear-haus-topics.php" "$PDATA/zigbee2mqttng_haus.json"
+fi
+
+# 4.1.1 (B12, Q4): retained topics of zigbee2mqtt itself - only without a
+# predecessor that uses the same topic (decided in clear-retained.php)
+if [ -f "$PBIN/clear-retained.php" ]; then
+    php "$PBIN/clear-retained.php" "$PCONFIG" "$PDATA" "$LBHOMEDIR"
+fi
+
+# 4.1.1 (B12): a predecessor whose service was switched off when its network
+# was taken over - without Zigbee2MqttNG no Zigbee runs any more
+for ORIG in zigbee2mqtt zigbee2lox; do
+    if [ -d "$LBPCONFIG/$ORIG" ] && ! systemctl is-enabled --quiet "$ORIG" 2>/dev/null; then
+        echo "<WARNING> The plugin $ORIG is still installed, but its service was switched off when Zigbee2MqttNG took over the network. Without Zigbee2MqttNG no Zigbee device works now. To use $ORIG again: as root systemctl enable --now $ORIG (as user loxberry: sudo systemctl enable --now $ORIG). Its automatic updates were switched off as well (LoxBerry, Plugin management)."
+    fi
+done
+
+# 4.1.1 (B3, Regeln/06): the second copies next to the config folder carry
+# the broker password and the network key - removed here, the installer
+# only removes the folder itself. Fail-closed: only with a plugin name and
+# an existing config/plugins folder.
+if [ -n "$PDIR" ] && [ -d "$LBPCONFIG" ]; then
+    N=0
+    for f in "$LBPCONFIG/$PDIR".backup.* "$LBPCONFIG/$PDIR".alt.*; do
+        if [ -f "$f" ]; then
+            : > "$f"
+            rm -f "$f"
+            N=$((N+1))
+        fi
+    done
+    REST=$(ls -d "$LBPCONFIG/$PDIR".backup.* "$LBPCONFIG/$PDIR".alt.* 2>/dev/null | wc -l)
+    if [ "$REST" -eq 0 ]; then
+        echo "<OK> Second copies of the configuration removed ($N)"
+    else
+        echo "<WARNING> $REST second cop(ies) could not be removed: $LBPCONFIG/$PDIR.backup.* - please delete by hand"
+    fi
+else
+    echo "<WARNING> Second copies not removed: config folder unknown. Please look for $PDIR.backup.* below config/plugins by hand."
 fi
 
 # Exit with Status 0

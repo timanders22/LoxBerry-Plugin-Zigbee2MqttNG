@@ -60,7 +60,16 @@ jobs:
         run: |
           sed -i "s/__VERSION__/$VERSION/g" plugin.cfg
           mkdir -p /tmp/plugin
-          rsync -a --exclude .git --exclude .github --exclude output.log --exclude DOCKER_ENV --exclude docker_tag ./ /tmp/plugin/
+          # 4.1.1 (B16): Dockerfile-php-build is left by the composer action,
+          # .gitignore and resources/ (templates of release.cfg) are not
+          # needed on the LoxBerry
+          rsync -a --exclude .git --exclude .github --exclude output.log --exclude DOCKER_ENV --exclude docker_tag \
+            --exclude Dockerfile-php-build --exclude .gitignore --exclude resources ./ /tmp/plugin/
+          # 4.1.1 (B18): only bin/ may be executable (the installer sets the
+          # hooks executable itself); vendor/ of composer stays as it is
+          chmod 0644 /tmp/plugin/postroot.sh /tmp/plugin/version.sh
+          AUSF=$(find /tmp/plugin -type f -perm /111 ! -path '/tmp/plugin/bin/*' ! -path '*/include/vendor/*')
+          if [ -n "$AUSF" ]; then echo "Executable outside bin/: $AUSF"; exit 1; fi
           (cd /tmp/plugin && zip -qr /tmp/plugin.zip .)
           unzip -p /tmp/plugin.zip plugin.cfg | grep "^VERSION=$VERSION$"
       - name: Create release

@@ -58,14 +58,56 @@ if [ $retVal -ne 0 ]; then
     exit 2
 fi
 
+# 4.1.1 (B5): the installer removes config/ and data/ of the plugin right
+# after this script. The copy below holds the network key - it is checked,
+# and if it is incomplete the update is cancelled (exit 2) instead of
+# going on without the Zigbee network. zigbee2mqtt is stopped first, so the
+# files do not change while they are copied (preroot.sh would stop it a
+# moment later anyway); on a cancelled update it is started again.
+SICHERUNG=/tmp/${PTEMPDIR}_upgrade
+abbrechen() {
+    echo "<FAIL> $1"
+    echo "<FAIL> The update is cancelled, nothing was changed. The Zigbee network stays as it is."
+    if [ "$GESTOPPT" = "1" ]; then
+        sudo -n systemctl start zigbee2mqttng >/dev/null 2>&1 && echo "<INFO> zigbee2mqtt started again"
+    fi
+    exit 2
+}
+
+GESTOPPT=0
+if systemctl is-active --quiet zigbee2mqttng; then
+    echo "<INFO> Stopping zigbee2mqtt for the backup"
+    if timeout 60 sudo -n systemctl stop zigbee2mqttng >/dev/null 2>&1; then
+        GESTOPPT=1
+    else
+        echo "<WARNING> zigbee2mqtt could not be stopped - its files are copied while it runs"
+    fi
+fi
+
 echo "<INFO> Creating temporary folders for upgrading"
-mkdir /tmp/${PTEMPDIR}_upgrade
-mkdir /tmp/${PTEMPDIR}_upgrade/config
-mkdir /tmp/${PTEMPDIR}_upgrade/data
+# The copy holds the network key and the broker password: only for loxberry
+umask 077
+mkdir "$SICHERUNG" "$SICHERUNG/config" "$SICHERUNG/data" || abbrechen "Could not create $SICHERUNG"
 
 echo "<INFO> Backing up existing files"
-cp -v -r $PCONFIG/ /tmp/${PTEMPDIR}_upgrade/config
-cp -v -r $PDATA/ /tmp/${PTEMPDIR}_upgrade/data
+cp -p -r "$PCONFIG/" "$SICHERUNG/config" || abbrechen "Copying $PCONFIG failed (disk full?)"
+cp -p -r "$PDATA/" "$SICHERUNG/data" || abbrechen "Copying $PDATA failed (disk full?)"
+
+# Check: every file of config/ and the files that hold the network must be
+# in the copy, byte for byte
+for f in "$PCONFIG"/*; do
+    [ -f "$f" ] || continue
+    cmp -s "$f" "$SICHERUNG/config/$PDIR/$(basename "$f")" || abbrechen "Backup of $(basename "$f") is incomplete"
+done
+for f in configuration.yaml coordinator_backup.json database.db devices.yaml groups.yaml; do
+    [ -f "$PDATA/$f" ] || continue
+    cmp -s "$PDATA/$f" "$SICHERUNG/data/$PDIR/$f" || abbrechen "Backup of $f is incomplete"
+done
+echo "<OK> Backup checked: $(find "$SICHERUNG" -type f | wc -l) files in $SICHERUNG"
+
+# Second copies next to the config folder - the second line of defence if
+# the copy above is lost (B3)
+php "$PTEMPPATH/bin/zweitschrift.php" ziehen "$PCONFIG" "$PDATA"
 
 # Exit with Status 0
 exit 0

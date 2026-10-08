@@ -1,6 +1,8 @@
 {% import 'macros.html' as m %}
 
+{{ m.konfiglage(konfig) }}
 {{ m.predecessors(predecessors) }}
+{{ m.legende(['lesen', 'aktion']) }}
 
 <form id="ServiceConfig" onsubmit="return false;">
     <div class="wide">Zigbee2MqttNG</div>
@@ -31,7 +33,7 @@
     {{ m.row('ServiceConfig[port]', 'ServiceConfig.LabelPort' | trans, f, 'ServiceConfig.HintPort' | trans) }}
 
     {% set f %}
-    <button type="button" id="testport" data-mini="true" data-inline="true">{{ 'ServiceConfig.ButtonTestPort' | trans }}</button>
+    <button data-role="none" type="button" id="testport" class="zng-btn zng-b-lesen">{{ 'ServiceConfig.ButtonTestPort' | trans }}</button>
     <span id="testportresult"
         data-reachable="{{ 'ServiceConfig.TestReachable' | trans }}"
         data-unreachable="{{ 'ServiceConfig.TestUnreachable' | trans }}"
@@ -121,10 +123,40 @@
 
 {{ m.savebutton() }}
 
+{{ m.dienstknoepfe() }}
+
 <hr>
 <div class="wide">{{ 'Backup.Title' | trans }}</div>
-<p>{{ 'Backup.Desc' | trans }}</p>
-<div class="zng-center">
-    <a href="backup.php" class="ui-btn ui-btn-inline ui-mini ui-corner-all" data-ajax="false">{{ 'Backup.Button' | trans }}</a>
+
+<!-- 4.1.1 (B3): the settings of the plugin, with the credentials -->
+<h3>{{ 'Sicherung.Titel' | trans }}</h3>
+<p>{{ 'Sicherung.Desc' | trans }}</p>
+<div class="zng-buttons">
+    <a data-role="none" data-ajax="false" class="zng-btn zng-b-lesen" href="ajax.php?action=backupSettings">{{ 'Sicherung.Sichern' | trans }}</a>
 </div>
-<p class="hint">{{ 'Backup.Secret' | trans }}</p>
+<p class="hint"><b>{{ 'Sicherung.Secret' | trans }}</b></p>
+<div class="zng-buttons">
+    <input data-role="none" type="file" id="sicherungdatei" accept=".json,application/json">
+    <button data-role="none" type="button" id="sicherungladen" class="zng-btn zng-b-aktion">{{ 'Sicherung.Zurueck' | trans }}</button>
+</div>
+<p class="hint">{{ 'Sicherung.ZurueckHinweis' | trans }}</p>
+<div id="sicherungergebnis" style="display:none"
+    data-ok="{{ 'Sicherung.Ok' | trans }}"
+    data-fehlend="{{ 'Sicherung.Fehlend' | trans }}"
+    data-abgelehnt="{{ 'Sicherung.Abgelehnt' | trans }}"
+    data-keinedatei="{{ 'Sicherung.KeineDatei' | trans }}"></div>
+
+<!-- the Zigbee network: ZIP made by zigbee2mqtt itself -->
+<h3>{{ 'Backup.NetzTitel' | trans }}</h3>
+<p>{{ 'Backup.Desc' | trans }}</p>
+<div class="zng-buttons">
+    <a data-role="none" data-ajax="false" class="zng-btn zng-b-lesen" href="backup.php">{{ 'Backup.Button' | trans }}</a>
+</div>
+<p class="hint"><b>{{ 'Backup.Secret' | trans }}</b></p>
+<p>{{ 'Backup.ZurueckTitel' | trans }}</p>
+<ol class="hint">
+    <li>{{ 'Backup.Zurueck1' | trans }}</li>
+    <li>{{ 'Backup.Zurueck2' | trans }} <code>cd "{{ datenordner }}" &amp;&amp; unzip -o /tmp/zigbee2mqttng_backup_….zip</code></li>
+    <li>{{ 'Backup.Zurueck3' | trans }}</li>
+</ol>
+<p class="hint">{{ 'Backup.ZurueckHinweis' | trans | replace({'%s': zweitschriftOrdner}) }}</p>

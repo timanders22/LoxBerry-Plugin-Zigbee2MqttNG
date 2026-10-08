@@ -201,9 +201,16 @@ function saveDevices() {
         data: ace.edit("editor").getValue()
     })
         .done(function () {
-            applyChanges().then(function () {
+            // 4.1.1 (B10): saved - whether zigbee2mqtt runs afterwards is
+            // measured and said
+            applyChanges().then(function (answer) {
                 $(".submitting").hide();
-                $(".saveok").show();
+                if (answer && answer.ok) {
+                    $(".saveok").show();
+                    $(".savedienst").css("color", "green").text(" " + dienstText(answer));
+                } else {
+                    $(".savedienst").css("color", "red").text($("#dienstmeldungen").data("gespeichert") + " " + dienstText(answer));
+                }
             }, failed);
         })
         .fail(failed);

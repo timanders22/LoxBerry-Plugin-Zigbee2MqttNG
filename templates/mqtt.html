@@ -1,5 +1,8 @@
 {% import 'macros.html' as m %}
 
+{{ m.konfiglage(konfig) }}
+{{ m.legende(['aktion']) }}
+
 <form id="MqttConfig" onsubmit="return false;">
     <div class="wide">MQTT</div>
     <p><i>{{ 'Mqtt.Desc' | trans }}</i></p>

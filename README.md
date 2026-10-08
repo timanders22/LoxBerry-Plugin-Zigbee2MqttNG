@@ -8,6 +8,46 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.1.1
+
+* **Konfiguration geht nicht mehr verloren.** Ist `mqtt.json`, `service.json` oder `configuration.yaml` vorhanden, aber
+  nicht lesbar (etwa nach einem Stromausfall beim Schreiben), schreibt das Plugin sie nicht mehr mit Werkseinstellungen
+  neu. Bis 4.1.0 geschah das vor jedem Start – bei `configuration.yaml` samt Verlust des Netzwerkschlüssels. Jetzt
+  bleibt die beschädigte Datei als `….kaputt` liegen, wird aus ihrer Zweitschrift wiederhergestellt, und gibt es
+  keine lesbare Zweitschrift, startet zigbee2mqtt nicht, bis die Datei lesbar ist. Einstellungsseite, Reiter Test
+  und eine LoxBerry-Benachrichtigung sagen es.
+* **Zweitschriften** von `mqtt.json`, `service.json`, `configuration.yaml` und `coordinator_backup.json` liegen neben
+  dem Konfigurationsordner (`config/plugins/zigbee2mqttng.backup.*`) und überstehen jedes Update.
+* **Update bricht ab, statt das Netz zu verlieren:** `preupgrade.sh` prüft die Kopie der Daten Byte für Byte und
+  bricht das Update ab, wenn sie unvollständig ist (vorher lief es weiter).
+* **Dateien mit Zugangsdaten nur für loxberry (0600)** – Broker-Kennwort, Token der Oberfläche, Netzwerkschlüssel; alle
+  Schreibwege schreiben unteilbar.
+* **Einstellungen sichern / zurückspielen** im Reiter Einstellungen: eine JSON-Datei mit allen Einstellungen samt
+  Zugangsdaten; beim Zurückspielen wird jeder Wert geprüft, eine halb gültige oder fremde Datei ändert nichts.
+  Dazu die Anleitung, wie die ZIP-Sicherung von zigbee2mqtt zurückgespielt wird.
+* **Dienst starten, neu starten, anhalten** im Reiter Einstellungen; „Speichern und aktualisieren“ meldet, ob
+  zigbee2mqtt danach wirklich läuft (bis 4.1.0 stand dort immer „Erfolgreich gespeichert“).
+* **Lebenszeichen für Loxone:** `<topic>/zigbee2mqttng/ts` (Unix-Sekunden) und `<topic>/zigbee2mqttng/zaehler`
+  (0…999), jede Minute, nie retained. Stirbt zigbee2mqtt, bleiben Gerätewerte und `erreichbar` in Loxone stehen –
+  nur das Lebenszeichen nicht.
+* **Reiter „Einbindung in Loxone“ in sieben Schritten** mit Baustein-Liste und Ausfallerkennung; neue Vorlage
+  **virtueller HTTP-Eingang** für das MQTT-Gateway im HTTP-Betrieb; in allen Vorlagen kurze Kachelnamen
+  (`Gerät: Wert`, höchstens 40 Zeichen) und Grenzen je Einheit. Titel und Befehle der bisherigen Vorlagen bleiben
+  gleich.
+* **Deinstallation:** hält zigbee2mqtt mit Zeitgrenze an, räumt die zurückbehaltenen Themen von zigbee2mqtt nur, wenn
+  kein Vorgänger dasselbe Topic nutzt, warnt vor einem bei der Übernahme abgeschalteten Vorgänger und entfernt die
+  Zweitschriften.
+* Kleinere Berichtigungen: Installer-Ausgabe (leere Zeilen „Installation folder“/„Plugin version“), Hinweis auf die
+  RAM-Disk im Reiter Logdateien, Knopffarben mit Legende, Wertprüfung ohne stilles Umdeuten (Kanal „15.7“ wurde
+  15), Archiv ohne `Dockerfile-php-build`.
+
+* **Deinstallieren des Original-Plugins entfernt Zigbee2MqttNG nicht mehr.** LoxBerry ruft beim Deinstallieren
+  jedes Skript auf, dessen Name mit dem Plugin-Namen beginnt – `zigbee2mqtt` trifft also auch `zigbee2mqttng`.
+  Bis 4.1.0 entfernte die Deinstallation des Originals deshalb Dienst und Programmordner von Zigbee2MqttNG
+  (am LoxBerry gemessen; die Daten blieben, eine erneute Installation von 4.1.0 stellte alles wieder her).
+  Jetzt prüft das Skript Namen und Ordner und tut für ein anderes Plugin nichts. **Wer noch 4.1.0 hat:** erst auf
+  4.1.1 aktualisieren, dann das Original deinstallieren.
+
 ## Umstieg vom Original-Plugin oder von Zigbee2Lox
 
 Bei der Erstinstallation übernimmt Zigbee2MqttNG automatisch das Zigbee-Netz des Vorgängers – zuerst von
@@ -33,11 +73,11 @@ Die Oberfläche folgt dem Hausstandard: **Einstellungen**, **MQTT**, **Einbindun
 
 | Reiter | Inhalt |
 |---|---|
-| Einstellungen | Koordinator-Vorlage, Adapter-Pfad mit Verbindungstest, Adapter-Typ, Funkkanal (mit Thread- und WLAN-Kanal), Erreichbarkeit, Zigbee2mqtt UI mit Token, Benachrichtigungen, Sicherung als ZIP |
+| Einstellungen | Koordinator-Vorlage, Adapter-Pfad mit Verbindungstest, Adapter-Typ, Funkkanal (mit Thread- und WLAN-Kanal), Erreichbarkeit, Zigbee2mqtt UI mit Token, Benachrichtigungen, Dienst starten/neu starten/anhalten, Einstellungen sichern/zurückspielen, Sicherung des Netzes als ZIP |
 | Geräte | Anlernen für 254 s, Liste aller Geräte mit letzten Werten und Erreichbarkeit, Netzwerkkarte, Zigbee2mqtt UI, `devices.yaml` |
 | MQTT | Broker, Topic, Weiterleitung an den Miniserver, Haus-Themen |
-| Einbindung in Loxone | Vorlagen für virtuelle Ein- und Ausgänge |
-| Test | prüft die ganze Kette ohne Loxone (Dienst, Broker, Erweiterung, Adapter, Funk, Gateway, Haus-Themen) |
+| Einbindung in Loxone | sieben Schritte: Weg, Abo, Eingänge (Vorlagen HTTP und UDP), Befehle, Ausfallerkennung, Baustein-Liste, Gegenprobe |
+| Test | prüft die ganze Kette ohne Loxone (Dienst, Broker, Erweiterung, Lebenszeichen, Adapter, Funk, Gateway, Haus-Themen, Konfiguration, Zweitschriften, Rechte, Vorlagen) |
 | Logdateien | Plugin-Protokolle und `zigbee2mqtt.log` |
 
 ## Was Zigbee2MqttNG zusätzlich kann
@@ -121,7 +161,9 @@ Port einstellbar (Standard 8881), standardmäßig mit Token (`frontend.auth_toke
   Haus-Themen und löst Benachrichtigungen aus. Gesteuert wird sie über `data/zigbee2mqttng.json`, das
   `bin/update-config.php` schreibt.
 * `bin/update-config.php` läuft beim Speichern, bei der Installation und vor jedem Start des Dienstes
-  (`ExecStartPre`) – geänderte Zugangsdaten des MQTT Gateways kommen so automatisch an.
+  (`ExecStartPre`) – geänderte Zugangsdaten des MQTT Gateways kommen so automatisch an. Ist eine
+  Konfigurationsdatei unlesbar und ohne lesbare Zweitschrift, legt es die Datei `startsperre` an; die zweite
+  `ExecStartPre`-Zeile startet zigbee2mqtt dann nicht (Rückgabe 3).
 * Die Installation baut zigbee2mqtt in `/opt/zigbee2mqttng.new` und tauscht erst nach Erfolg. Scheitert der Bau
   (z. B. ohne Internet), läuft die bisherige Fassung weiter.
 * Eine neue Installation erzeugt eigenen Netzwerkschlüssel, PAN-ID und erweiterte PAN-ID.

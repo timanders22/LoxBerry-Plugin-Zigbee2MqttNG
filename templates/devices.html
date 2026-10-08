@@ -29,13 +29,14 @@
 
 <div class="wide">{{ 'Navbar.Devices' | trans }}</div>
 <p><i>{{ 'Devices.Desc' | trans }}</i></p>
+{{ m.legende(service.enableUI ? ['lesen', 'technik', 'aktion'] : ['technik', 'aktion']) }}
 
 <!-- ============ Pairing ============ -->
 <h3>{{ 'Devices.PairingTitle' | trans }}</h3>
 <div class="zng-buttons">
     <!-- acts on the running service right away, nothing is saved -->
-    <button type="button" id="permitjoinopen" data-mini="true" data-inline="true">{{ 'Devices.ButtonPairingOpen' | trans }}</button>
-    <button type="button" id="permitjoinclose" data-mini="true" data-inline="true">{{ 'Devices.ButtonPairingClose' | trans }}</button>
+    <button data-role="none" type="button" id="permitjoinopen" class="zng-btn zng-b-aktion">{{ 'Devices.ButtonPairingOpen' | trans }}</button>
+    <button data-role="none" type="button" id="permitjoinclose" class="zng-btn zng-b-aktion">{{ 'Devices.ButtonPairingClose' | trans }}</button>
     <span id="permitjoinresult"
         data-open="{{ 'Devices.PairingOpen' | trans }}"
         data-closed="{{ 'Devices.PairingClosed' | trans }}"
@@ -49,7 +50,7 @@
 
 {% if service.enableUI %}
 <p class="zng-buttons">
-    <a href="ui.php" class="ui-btn ui-btn-inline ui-mini ui-corner-all" data-ajax="false">{{ 'Devices.UIButton' | trans }}</a>
+    <a data-role="none" href="ui.php" class="zng-btn zng-b-lesen" data-ajax="false">{{ 'Devices.UIButton' | trans }}</a>
     {% if service.frontendAuth and service.frontendToken %}<span class="hint">{{ 'Devices.UIToken' | trans }} <code>{{ service.frontendToken }}</code></span>{% endif %}
 </p>
 {% endif %}
@@ -96,7 +97,7 @@
 <h3>{{ 'Map.Title' | trans }}</h3>
 <p class="hint">{{ 'Map.Desc' | trans }} {{ 'Map.Hint' | trans }}</p>
 <div class="zng-buttons">
-    <button type="button" id="mapscan" data-inline="true" data-mini="true">{{ 'Map.Scan' | trans }}</button>
+    <button data-role="none" type="button" id="mapscan" class="zng-btn zng-b-technik">{{ 'Map.Scan' | trans }}</button>
     <span id="mapstatus"
         data-scanning="{{ 'Map.Scanning' | trans }}"
         data-done="{{ 'Map.Done' | trans }}"
@@ -137,9 +138,11 @@
             <span class="submitting" style="display: none;">{{ 'Common.Submitting' | trans }}</span>
             <span class="saveok" style="display: none;">{{ 'Common.HintSaveOK' | trans }}</span>
             <span class="saveerror" style="display: none;">{{ 'Common.HintSaveError' | trans }}</span>
+            <span class="savedienst"></span>
         </span>
     </div>
+    {{ m.diensttexte() }}
     <div class="zng-center">
-        <button class="ui-btn ui-btn-icon-right" id="saveapply" data-inline="true">{{ 'Common.SaveApply' | trans }}</button>
+        <button data-role="none" type="button" class="zng-btn zng-b-aktion" id="saveapply">{{ 'Common.SaveApply' | trans }}</button>
     </div>
 </div>

@@ -11,6 +11,11 @@ EnvironmentFile=-REPLACELBPCONFIGDIR/service.env
 # Brings configuration.yaml up to date before every start, e.g. after the
 # broker credentials of the MQTT gateway changed. A failure does not block the start.
 ExecStartPre=-/usr/bin/php REPLACELBPBINDIR/update-config.php
+# 4.1.1 (B1/B2): update-config.php writes the file "startsperre" when a
+# configuration file cannot be read and has no readable second copy. Then
+# zigbee2mqtt is not started - with defaults it would lose the network key.
+# The settings page and the Test tab say why and what to do.
+ExecStartPre=/bin/sh -c 'test ! -e REPLACELBPCONFIGDIR/startsperre'
 # Absolute path: systemd does not search the PATH set above for the command
 ExecStart=/opt/zigbee2mqttng/node/bin/node index.js
 WorkingDirectory=/opt/zigbee2mqttng

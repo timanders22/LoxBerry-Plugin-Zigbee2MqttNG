@@ -1,3 +1,6 @@
+{% import 'macros.html' as m %}
+{# 4.1.1 (B15): the plugin logs are on a RAM disk #}
+<p class="hint">{{ 'Log.Ramdisk' | trans }}</p>
 {{loglist | raw}}
 
 <div data-role='collapsible' id='coll_package_zigbee' data-content-theme='true' data-collapsed='false'
@@ -5,11 +8,14 @@
     <h2 class='ui-bar ui-bar-a ui-corner-all' id='package_mqttgateway_zigbee'>{{ 'Log.Title' | trans }}</h2>
     <table style='width:100%; padding:8px; border:1px solid #ddd; border-collapse: collapse;'>
         <tr>
+            <td colspan="4">{{ m.legende(['lesen']) }}</td>
+        </tr>
+        <tr>
             <td>zigbee2mqtt.log</td>
             <td></td>
-            <td><a data-role='button'
+            <td><a data-role='none' class='zng-btn zng-b-lesen'
                     href='/admin/system/tools/logfile.cgi?logfile={{ logfile | url_encode }}&header=html&format=template&only=once'
-                    target='_blank' data-inline='true' data-mini='true' data-icon='action'>Logfile</a></td>
+                    target='_blank'>Logfile</a></td>
             <td></td>
         </tr>
     </table>

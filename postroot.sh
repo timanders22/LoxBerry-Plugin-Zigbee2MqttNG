@@ -236,8 +236,20 @@ for ORIGDIR in $PREDECESSORS; do
     echo "<WARNING> The plugin $ORIGDIR is still installed. Please uninstall it - an update of it would start its service again and both would fight for the Zigbee adapter."
 done
 
+# 4.1.1 (B3, Bauart F): second copies left by an earlier installation are
+# never taken over by a fresh one - they are set aside
+if [ "$ISUPGRADE" -eq "0" ]; then
+    php $PBIN/zweitschrift.php beiseite "$PCONFIG"
+fi
+
 echo "<INFO> Refresh config"
 php $PBIN/update-config.php
+RC_UPDATE=$?
+if [ "$RC_UPDATE" -eq "3" ]; then
+    echo "<ERROR> A configuration file of Zigbee2MqttNG cannot be read and has no readable second copy. zigbee2mqtt is not started, so the Zigbee network is not lost. The settings page of the plugin says what to do."
+elif [ "$RC_UPDATE" -ne "0" ]; then
+    echo "<WARNING> update-config.php ended with code $RC_UPDATE - see the log Service of the plugin"
+fi
 
 chown loxberry:loxberry $PDATA/* -R
 chown loxberry:loxberry $PCONFIG/* -R
@@ -249,6 +261,17 @@ if [ "$ISUPGRADE" -eq "0" ] && [ "$MIGRATED" -eq "0" ]; then
     echo "<INFO> Fresh installation detected - Set encryption key"
     php $PBIN/setup-encryption.php
 fi
+
+# 4.1.1 (B4): the files with the broker password, the UI token and the
+# network key are for loxberry only - also when they came from the archive
+# (0644) or from a backup of 4.1.0
+for f in "$PCONFIG/mqtt.json" "$PCONFIG/service.json" "$PDATA/configuration.yaml" "$PDATA/coordinator_backup.json" \
+         "$PCONFIG"/*.kaputt "$PDATA"/*.kaputt "$LBHOMEDIR/config/plugins/$PDIR".backup.* "$LBHOMEDIR/config/plugins/$PDIR".alt.*; do
+    if [ -f "$f" ]; then
+        chown loxberry:loxberry "$f"
+        chmod 600 "$f"
+    fi
+done
 
 echo "<INFO> Updating service config"
 ln -f -s $PCONFIG/zigbee2mqttng.service /etc/systemd/system/$SERVICE.service

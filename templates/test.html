@@ -6,8 +6,10 @@
     }
 </style>
 
+{% import 'macros.html' as m %}
 <div class="wide">{{ 'Navbar.Test' | trans }}</div>
 <p><i>{{ 'Test.Desc' | trans }}</i></p>
+{{ m.legende(['lesen']) }}
 
 <p class="hint">
     <span class="zng-ok">&#10004;</span> {{ 'Test.LegendOk' | trans }} &nbsp;
@@ -30,5 +32,5 @@
 
 <div class="zng-center" style="gap:1em;margin-top:1em">
     <span class="hint">{{ 'Test.Updated' | trans }} {{ time }}</span>
-    <a href="test.php" class="ui-btn ui-btn-inline ui-mini ui-corner-all" data-ajax="false">{{ 'Test.Refresh' | trans }}</a>
+    <a data-role="none" href="test.php" class="zng-btn zng-b-lesen" data-ajax="false">{{ 'Test.Refresh' | trans }}</a>
 </div>

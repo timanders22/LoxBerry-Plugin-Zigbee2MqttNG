@@ -11,6 +11,7 @@ Plugin::createHeader(Plugin::MQTT);
 $mqtt_installed = (int) substr(LBSystem::lbversion(), 0, 1) > 2 || LBSystem::plugindata('mqttgateway');
 
 echo $twig->render('mqtt.html', array(
+    "konfig" => zng_konfig_anzeige(),
     "mqtt_installed" => $mqtt_installed,
     "gateway" => zng_gateway_info(),
 ));

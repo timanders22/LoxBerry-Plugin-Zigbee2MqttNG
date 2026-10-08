@@ -70,12 +70,37 @@ function updateFormData(name) {
     });
 }
 
+/**
+ * Runs update-config.php and restarts zigbee2mqtt. 4.1.1 (B10): resolves
+ * with the measured answer {ok, laeuft, pid, zustand, update, sperre, ...};
+ * "ok" false means the service does not run afterwards.
+ */
 function applyChanges() {
     return new Promise((resolve, reject) => {
-        $.post(`ajax.php?action=applyChanges`)
+        $.post(`ajax.php?action=applyChanges`, null, null, "json")
             .done(resolve)
             .fail((jqxhr, textStatus, error) => reject(error));
     });
+}
+
+/**
+ * 4.1.1 (B10): what happened to the service, from the measured answer
+ */
+function dienstText(a) {
+    const box = $("#dienstmeldungen");
+    if (!a || typeof a !== "object") {
+        return box.data("unbekannt") || "";
+    }
+    if (a.update === 3 || a.sperre) {
+        return box.data("gesperrt") || "";
+    }
+    if (a.tat === "stop") {
+        return a.ok ? box.data("angehalten") : box.data("nichtangehalten");
+    }
+    if (a.ok) {
+        return String(box.data("laeuft") || "").replace("%s", a.pid);
+    }
+    return String(box.data("laeuftnicht") || "").replace("%s", a.zustand || "?");
 }
 
 /**
@@ -110,14 +135,24 @@ function saveAndApply(forms) {
     $(".submitting").show();
     showErrors(null);
 
+    $(".savedienst").text("");
     Promise.all(forms.map(updateFormData))
         .then(function () {
-            return applyChanges();
-        })
-        .then(function () {
-            $(".submitting").hide();
-            $(".saveok").show();
-            location.reload();
+            return applyChanges().then(function (answer) {
+                $(".submitting").hide();
+                if (answer && answer.ok) {
+                    $(".saveok").show();
+                    $(".savedienst").css("color", "green").text(" " + dienstText(answer));
+                    setTimeout(function () { location.reload(); }, 1500);
+                } else {
+                    // saved, but the service does not run - no reload, the
+                    // message stays
+                    $(".savedienst").css("color", "red").text($("#dienstmeldungen").data("gespeichert") + " " + dienstText(answer));
+                }
+            }, function () {
+                $(".submitting").hide();
+                $(".savedienst").css("color", "red").text($("#dienstmeldungen").data("gespeichert") + " " + dienstText(null));
+            });
         })
         .catch(function (answer) {
             $(".submitting").hide();

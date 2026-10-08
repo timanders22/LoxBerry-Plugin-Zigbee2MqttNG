@@ -21,7 +21,13 @@
 //    retained value of another provider is never overwritten, and a value
 //    that goes away is replaced by "-" once.
 //  - optionally sends LoxBerry notifications for devices that went offline and
-//    for low batteries.
+//    for low batteries,
+//  - 4.1.1: publishes a heartbeat for Loxone every minute, never retained:
+//        <topic>/zigbee2mqttng/ts       unix seconds
+//        <topic>/zigbee2mqttng/zaehler  0...999, wraps around
+//    erreichbar and the device values keep their last value in Loxone when
+//    zigbee2mqtt dies; only the heartbeat stops. A retained heartbeat would
+//    say "alive" for a dead service (house rule Regeln/07).
 //
 // Do not edit the copy in data/external_extensions - it is overwritten.
 
@@ -37,6 +43,10 @@ const UMLAUTS = [["ä", "ae"], ["ö", "oe"], ["ü", "ue"], ["ß", "ss"], ["Ä", 
 // published there before this time, so a foreign value is known beforehand.
 const FOREIGN_WAIT_MS = 3000;
 const NOTIFY_DELAY_MS = 60000;
+// Heartbeat below <topic>/ - must match zng_subscription_lines() and the
+// templates in bin/zigbee2mqttng.php
+export const HEARTBEAT_TOPIC = "zigbee2mqttng";
+const HEARTBEAT_MS = 60000;
 
 function readJson(file, fallback) {
     try {
@@ -111,7 +121,7 @@ function stateDevices(devices) {
 
 // Must give the same result as zng_subscription_lines() in bin/zigbee2mqttng.php
 export function subscriptionLines(base, devices, groups, availability, haus) {
-    const lines = [`${base}/bridge/state`];
+    const lines = [`${base}/bridge/state`, `${base}/${HEARTBEAT_TOPIC}/#`];
     for (const device of stateDevices(devices)) {
         lines.push(`${base}/${device.friendly_name}`);
         if (availability) {
@@ -198,6 +208,9 @@ export default class Zigbee2MqttNGExtension {
         this.notifyTimer = null;
         this.notified = {};
         this.conflicts = new Set();
+        this.heartbeatTimer = null;
+        this.heartbeatCount = 0;
+        this.heartbeat = null;
     }
 
     async start() {
@@ -212,6 +225,12 @@ export default class Zigbee2MqttNGExtension {
 
         this.started = Date.now();
         this.writeStatus();
+
+        // Heartbeat for Loxone: right away, then every minute
+        await this.sendHeartbeat().catch((e) => this.logger.warning(`Zigbee2MqttNG: ${e}`));
+        this.heartbeatTimer = setInterval(() => {
+            this.sendHeartbeat().catch((e) => this.logger.warning(`Zigbee2MqttNG: ${e}`));
+        }, HEARTBEAT_MS);
 
         // The retained messages were published before this extension was
         // loaded - pick them up from the cache of the MQTT controller.
@@ -235,6 +254,8 @@ export default class Zigbee2MqttNGExtension {
     }
 
     async stop() {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
         clearTimeout(this.foreignTimer);
         clearTimeout(this.notifyTimer);
         this.flushNotifications();
@@ -249,7 +270,23 @@ export default class Zigbee2MqttNGExtension {
     // Read by the Test tab: is the extension loaded, which house topics
     // could not be sent because another provider owns them
     writeStatus() {
-        writeIfChanged(this.cfg.statusFile, JSON.stringify({started: this.started, conflicts: [...this.conflicts]}, null, 1));
+        writeIfChanged(this.cfg.statusFile, JSON.stringify({started: this.started, conflicts: [...this.conflicts],
+            heartbeat: this.heartbeat}, null, 1));
+    }
+
+    // ---------------- heartbeat for Loxone (4.1.1) ----------------
+
+    // ts (unix seconds) and zaehler (0...999). Never retained, not logged
+    // every minute. The Test tab reads the last one from the status file.
+    async sendHeartbeat() {
+        const ts = Math.floor(Date.now() / 1000);
+        const zaehler = this.heartbeatCount;
+        this.heartbeatCount = (this.heartbeatCount + 1) % 1000;
+        this.heartbeat = {ts, zaehler};
+        this.writeStatus();
+        const options = {clientOptions: {retain: false}, skipLog: true};
+        await this.mqtt.publish(`${HEARTBEAT_TOPIC}/ts`, String(ts), options);
+        await this.mqtt.publish(`${HEARTBEAT_TOPIC}/zaehler`, String(zaehler), options);
     }
 
     onPublished(data) {

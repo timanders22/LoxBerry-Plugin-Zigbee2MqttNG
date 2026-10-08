@@ -86,24 +86,69 @@ class MqttConfig
      */
     public function validate()
     {
+        $daten = get_object_vars($this);
         $errors = array();
-        $topic = (string) $this->topic;
-        if ($topic === "" || strpbrk($topic, "+#") !== false || strpos($topic, "//") !== false
-            || $topic[0] === "/" || substr($topic, -1) === "/" || preg_match('/\s/', $topic)) {
-            $errors[] = "Mqtt.ValInvalidTopic";
-        }
-        if (!is_enabled($this->usemqttgateway)) {
-            if (!preg_match('/^[A-Za-z0-9.\-:\[\]]+$/', (string) $this->server)) {
-                $errors[] = "Mqtt.ValInvalidServer";
+        foreach ($daten as $key => $value) {
+            list($ok, $result) = self::wert($key, $value, $daten);
+            if (!$ok && !in_array($result, $errors, true)) {
+                $errors[] = $result;
             }
-            if (!preg_match('/^[0-9]{1,5}$/', (string) $this->port) || (int) $this->port < 1 || (int) $this->port > 65535) {
-                $errors[] = "Mqtt.ValInvalidPort";
-            }
-        }
-        if (!in_array($this->forwardMode, array("devices", "all"), true)) {
-            $errors[] = "Mqtt.ValForwardMode";
         }
         return $errors;
+    }
+
+    /**
+     * 4.1.1 (B11): checks one value. Returns array(true, normalised value)
+     * or array(false, language key of the error). $daten holds all values,
+     * for the checks that depend on another one. Used by the form, the
+     * restore of a backup and update-config.php.
+     */
+    public static function wert($key, $value, $daten)
+    {
+        $gateway = isset($daten["usemqttgateway"]) && zng_haken($daten["usemqttgateway"]) === true;
+        switch ($key) {
+            case "usemqttgateway":
+            case "registerMqttTopic":
+            case "hausTopics":
+                $b = zng_haken($value);
+                return $b === null ? array(false, "Mqtt.ValSwitch") : array(true, $b);
+            case "topic":
+                $ok = is_string($value) && $value !== "" && strlen($value) <= 200
+                    && strpbrk($value, "+#") === false && strpos($value, "//") === false
+                    && $value[0] !== "/" && substr($value, -1) !== "/" && !preg_match('/[\s\x00-\x1F\x7F]/', $value);
+                return $ok ? array(true, $value) : array(false, "Mqtt.ValInvalidTopic");
+            case "server":
+                // with the gateway the field is hidden and unused: only the type is checked
+                if ($gateway) {
+                    return zng_text_ok($value, 253) ? array(true, $value) : array(false, "Mqtt.ValInvalidServer");
+                }
+                return is_string($value) && preg_match('/^[A-Za-z0-9.\-:\[\]]{1,253}\z/', $value)
+                    ? array(true, $value) : array(false, "Mqtt.ValInvalidServer");
+            case "port":
+                if (is_int($value)) {
+                    $value = (string) $value;
+                }
+                if ($gateway) {
+                    return zng_text_ok($value, 5) ? array(true, $value) : array(false, "Mqtt.ValInvalidPort");
+                }
+                $port = zng_zahl_text($value, 1, 65535, '/^[0-9]{1,5}\z/');
+                return $port === null ? array(false, "Mqtt.ValInvalidPort") : array(true, $port);
+            case "username":
+                return zng_text_ok($value) ? array(true, $value) : array(false, "Mqtt.ValInvalidUser");
+            case "password":
+                return zng_text_ok($value) ? array(true, $value) : array(false, "Mqtt.ValInvalidPassword");
+            case "forwardMode":
+                return in_array($value, array("devices", "all"), true) ? array(true, $value) : array(false, "Mqtt.ValForwardMode");
+        }
+        return array(false, "Common.UnknownKey");
+    }
+
+    /**
+     * 4.1.1 (B1): state of mqtt.json - "fehlt", "ok" or "kaputt"
+     */
+    public static function lage()
+    {
+        return zng_json_lage(LBPCONFIGDIR . "/mqtt.json");
     }
 
     /**
@@ -129,12 +174,19 @@ class MqttConfig
     }
 
     /**
-     * Saves the instance to the configuration file
+     * Saves the instance to the configuration file. Returns false if it
+     * could not be written (the old file is kept then).
      */
     public function save()
     {
+        // 4.1.1 (B4): in one piece and 0600 (broker password); the second
+        // copy next to the config folder follows a readable state only
         $mqttconfigfile = LBPCONFIGDIR . "/mqtt.json";
-        file_put_contents($mqttconfigfile, $this->toJson());
+        if (!zng_schreiben_wenn_anders($mqttconfigfile, $this->toJson(), ZNG_MODUS_GEHEIM)) {
+            return false;
+        }
+        zng_zweitschrift_ziehen($mqttconfigfile, "json", LBPCONFIGDIR, "mqtt.json");
+        return true;
     }
 
     /**
