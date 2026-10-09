@@ -159,6 +159,10 @@ Plugin::createHeader(isset($zng_skripte[$zng_tab]) ? $zng_skripte[$zng_tab] : ar
 .sm-step h3 { margin-top: 0; }
 .sm-wrap .sm-beanstandet { outline: 2px solid #c62828; }
 .sm-wrap .sm-btn:disabled { opacity: 0.5 !important; cursor: default; }
+/* Welle Bild (Entscheidung 45): Bild der Bausteine aus dem gemeinsamen Musterprojekt. */
+.sm-bild { margin: 12px 0; }
+.sm-bild img { max-width: 100%; height: auto; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+.sm-bild figcaption { font-size: .9em; color: #555; margin-top: 4px; }
 .submitting { color: grey; }
 .saveok { color: green; }
 .saveerror { color: red; }

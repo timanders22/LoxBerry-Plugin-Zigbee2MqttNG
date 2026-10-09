@@ -8,6 +8,17 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.1
+
+Reiter „Einbindung in Loxone“ zeigt ein Bild der Bausteine aus dem gemeinsamen Musterprojekt und
+verlinkt die Projektdatei.
+
+* Unter der Baustein-Liste (Schritt 6) steht das Bild der Seite „Zigbee2MqttNG“ aus dem
+  [LoxBerry-Plugins Musterprojekt](https://github.com/timanders22/LoxBerry-Plugins-Musterprojekt); das Bild liegt im Plugin,
+  nachgeladen wird nichts. Config kürzt lange Bausteinnamen, die vollen Namen stehen in der Tabelle.
+* Baustein-Liste unverändert.
+* Gerendert unter PHP 7.4, 8.4 und 8.5, nicht am Gerät angesehen.
+
 ## Neu in 4.2.0
 
 * **Eine Seite mit grünen Reitern** wie in den übrigen Plugins des Hauses, statt der LoxBerry-Navigationsleiste
@@ -165,6 +176,10 @@ Der Reiter „Einbindung in Loxone“ erzeugt aus der Geräteliste Vorlagen für
 
 Namensschema `ZIGBEE_<GERÄT>_<WERT>` – passend zu `MATTER_<N>_<E>_<THEMA>` aus Matter2Lox. Werte, die das Gateway
 nicht in 1/0 umwandelt (Text, Aufzählungen, `LOCK`/`UNLOCK`), sind als „kommt als Text an“ markiert.
+
+Die Bausteine der Baustein-Liste stehen fertig verbunden auf der Seite „Zigbee2MqttNG“ im
+[LoxBerry-Plugins Musterprojekt](https://github.com/timanders22/LoxBerry-Plugins-Musterprojekt), einer gemeinsamen
+Projektdatei mit allen Plugin-Seiten und Vorlagen.
 
 ### Zigbee2mqtt UI
 Port einstellbar (Standard 8881), standardmäßig mit Token (`frontend.auth_token`) geschützt.
