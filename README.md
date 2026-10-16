@@ -8,6 +8,21 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.2
+
+Einbindung in Loxone: Eingang En der Analogwertvalidierung nicht negieren (Hinweis und Bild); ohne diese
+Korrektur löste die Ausfallmeldung nie aus. Wer die Seite schon gebaut hat: Haken bei ‚En‘ entfernen.
+
+* Config legt den Eingang En der Analogwertvalidierung negiert an (Haken bei ‚En‘ im Eigenschaftsfenster
+  unter Parameter). Die Konstante 1 kam dadurch als 0 an, die Validierung prüfte die Zeit Tmc nicht.
+  Der Reiter „Einbindung in Loxone“ sagt das jetzt unter der Baustein-Liste bei Zeile 2; der Hinweis
+  zu #2 ist berichtigt (unbeschaltet steht En auf EIN).
+* Das Bild der Seite „Zigbee2MqttNG“ aus dem
+  [LoxBerry-Plugins Musterprojekt](https://github.com/timanders22/LoxBerry-Plugins-Musterprojekt)
+  ist neu: En ohne Negation.
+* Baustein-Liste unverändert.
+* Gerendert unter PHP 7.4, 8.4 und 8.5 (deutsch und englisch), nicht am Gerät angesehen.
+
 ## Neu in 4.2.1
 
 Reiter „Einbindung in Loxone“ zeigt ein Bild der Bausteine aus dem gemeinsamen Musterprojekt und
