@@ -8,6 +8,35 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.3
+
+Einbindung in Loxone in Vollausstattung: zwei Seiten aus dem LoxBerry-Plugins Musterprojekt mit Bauanleitung
+und zwei Bildern; die Ausgangsvorlage kann jetzt umschalten.
+
+* Schritt 6 des Reiters „Einbindung in Loxone“ zeigt statt einer Tabelle mit 12 Zeilen zwei Seiten, wortgleich
+  mit der Liste des [LoxBerry-Plugins Musterprojekts](https://github.com/timanders22/LoxBerry-Plugins-Musterprojekt):
+  **„Zigbee2MqttNG“** (15 Zeilen: Lebenszeichen und zwei überwachte Geräte, Status „Zigbee-Zustand“ in
+  Klartext mit Temperatur, Feuchte und Batterie) und **„Zigbee2MqttNG Geräte“** (18 Zeilen: Taster schaltet
+  eine Zigbee-Steckdose um, die Steckdose folgt der Anwesenheit, Fensterkontakt meldet bei Abwesenheit,
+  Helligkeit einer Zigbee-Lampe aus der App). Je Seite ein Kasten „So übernehmen Sie diese Seite“, Hinweise
+  und ein Bild. Die bisherigen Beispielzeilen Lichtsteuerung und Alarmanlage entfallen.
+* **Umschaltbefehl:** die Vorlage „Alle Ausgänge (virtueller Ausgang)“ enthält je Schalter, den zigbee2mqtt
+  mit `value_toggle` beschreibt, zusätzlich den Befehl `ZIGBEE_<GERÄT>_<WERT>_TOGGLE` (Befehl bei EIN
+  `TOGGLE`, bei AUS leer). zigbee2mqtt schaltet damit am echten Zustand des Geräts um. Die übrigen Befehle
+  bleiben gleich. Wer die Vorlage schon importiert hat, legt den einen Befehl von Hand an (Kasten der Seite
+  „Zigbee2MqttNG Geräte“).
+* **Zahlenbefehle** schicken den Wert mit `<v.0>` statt `<v>` (ganzzahlig, z. B. die Helligkeit 0–254).
+  Schon importiert: beim Befehl `<v>` durch `<v.0>` ersetzen.
+* **Taster-Eingänge** (`…_aktion_<aktion>`) in den Eingangsvorlagen mit MaxVal 2147483647 statt 1: der
+  Zähler je Taste wächst bis zum nächsten Neustart von zigbee2mqtt, und ein Wert über MaxVal wird in Loxone
+  zu 0. Ob der Miniserver das auch bei Werten aus dem Gateway tut, ist nicht gemessen. Schon importiert:
+  MaxVal am Eingang von Hand setzen.
+* Textberichtigungen der Tabelle: Parameter von #2 ohne die Namen aus der Projektdatei, #2 En = #8 (die
+  Konstante 1 ist jetzt eine eigene Zeile); #1/#3 als Virtueller HTTP-Eingang, #7 mit Meldetext; Gegenprobe Schritt 7 eine Zeile
+  mehr (Taster).
+* Gerendert unter PHP 7.4, 8.4 und 8.5 (deutsch und englisch), Vorlagen an einer Attrappe erzeugt; nicht am
+  Gerät angesehen.
+
 ## Neu in 4.2.2
 
 Einbindung in Loxone: Eingang En der Analogwertvalidierung nicht negieren (Hinweis und Bild); ohne diese
@@ -123,7 +152,7 @@ eine Statusübersicht: Dienst, Koordinator, erreichbare Geräte, MQTT.
 | Einstellungen | Koordinator-Vorlage, Adapter-Pfad mit Verbindungstest, Adapter-Typ, Funkkanal (mit Thread- und WLAN-Kanal), Erreichbarkeit, Zigbee2mqtt UI mit Token, Benachrichtigungen, Dienst starten/neu starten/anhalten, Einstellungen sichern/zurückspielen, Sicherung des Netzes als ZIP |
 | Geräte | Anlernen für 254 s, Liste aller Geräte mit letzten Werten und Erreichbarkeit, Netzwerkkarte, Zigbee2mqtt UI, `devices.yaml` |
 | MQTT | Broker, Topic, Weiterleitung an den Miniserver, Haus-Themen |
-| Einbindung in Loxone | sieben Schritte: Weg, Abo, Eingänge (Vorlagen HTTP und UDP), Befehle, Ausfallerkennung, Baustein-Liste, Gegenprobe |
+| Einbindung in Loxone | sieben Schritte: Weg, Abo, Eingänge (Vorlagen HTTP und UDP), Befehle, Ausfallerkennung, Baustein-Listen zweier Seiten aus dem Musterprojekt (Ausfall; Geräte) mit Bauanleitung und Bild, Gegenprobe |
 | Test | prüft die ganze Kette ohne Loxone (Dienst, Broker, Erweiterung, Lebenszeichen, Adapter, Funk, Gateway, Haus-Themen, Konfiguration, Zweitschriften, Rechte, Vorlagen) |
 | Logdateien | Plugin-Protokolle und `zigbee2mqtt.log` |
 
@@ -185,14 +214,15 @@ Der Reiter „Einbindung in Loxone“ erzeugt aus der Geräteliste Vorlagen für
 
 * **Virtueller UDP-Eingang** – Befehlserkennung `<topic>/<gerät>/<wert>=\v` für das UDP-Format des Gateways
 * **Virtueller Ausgang** – JSON-Befehle `{"topic":"<topic>/<gerät>/set/<wert>","value":…}` an den UDP-Eingang des
-  Gateways. Anders als `publish <topic> <wert>` funktionieren damit auch Gerätenamen mit Leerzeichen.
+  Gateways. Anders als `publish <topic> <wert>` funktionieren damit auch Gerätenamen mit Leerzeichen. Je Schalter
+  mit `value_toggle` zusätzlich ein Umschaltbefehl `…_TOGGLE`; Zahlen gehen mit `<v.0>` (ab 4.2.3).
 * Tabelle mit den Namen der virtuellen HTTP-Eingänge, falls das Gateway per HTTP sendet (das Gateway ersetzt nur
   `/` und `%` durch `_`)
 
 Namensschema `ZIGBEE_<GERÄT>_<WERT>` – passend zu `MATTER_<N>_<E>_<THEMA>` aus Matter2Lox. Werte, die das Gateway
 nicht in 1/0 umwandelt (Text, Aufzählungen, `LOCK`/`UNLOCK`), sind als „kommt als Text an“ markiert.
 
-Die Bausteine der Baustein-Liste stehen fertig verbunden auf der Seite „Zigbee2MqttNG“ im
+Die Bausteine der Baustein-Listen stehen fertig verbunden auf den Seiten „Zigbee2MqttNG“ und „Zigbee2MqttNG Geräte“ im
 [LoxBerry-Plugins Musterprojekt](https://github.com/timanders22/LoxBerry-Plugins-Musterprojekt), einer gemeinsamen
 Projektdatei mit allen Plugin-Seiten und Vorlagen.
 

@@ -930,10 +930,18 @@ function zng_device_ios($base, $devices, $availability)
                         "kachel" => zng_kachel($name, $property),
                         "on" => zng_udp_command($set, zng_payload(isset($e["value_on"]) ? $e["value_on"] : "ON")),
                         "off" => zng_udp_command($set, zng_payload(isset($e["value_off"]) ? $e["value_off"] : "OFF")));
+                    // 4.2.3 (E5): a switch that knows value_toggle also gets a toggle command - zigbee2mqtt
+                    // toggles at the real state of the device, a button pulse in Loxone needs nothing more
+                    if (isset($e["value_toggle"]) && zng_payload($e["value_toggle"]) !== "") {
+                        $entry["outputs"][] = array("title" => zng_title($name, $property . "_toggle"), "property" => $property, "analog" => false,
+                            "kachel" => zng_kachel($name, $property . " " . zng_payload($e["value_toggle"])),
+                            "on" => zng_udp_command($set, zng_payload($e["value_toggle"])), "off" => "");
+                    }
                 } elseif ($e["type"] == "numeric") {
                     $entry["outputs"][] = array("title" => $title, "property" => $property, "analog" => true,
                         "kachel" => zng_kachel($name, $property),
-                        "on" => zng_udp_command($set, "<v>"), "off" => "");
+                        // 4.2.3 (E9): <v.0> sends the bare number without decimals (Regeln/07)
+                        "on" => zng_udp_command($set, "<v.0>"), "off" => "");
                 } elseif ($e["type"] == "enum" && isset($e["values"]) && count($e["values"]) <= 12) {
                     foreach ($e["values"] as $value) {
                         $entry["outputs"][] = array("title" => zng_title($name, $property . "_" . $value), "property" => $property,
@@ -943,11 +951,13 @@ function zng_device_ios($base, $devices, $availability)
                 }
             }
         }
-        // button presses: one pulse per press (counter, reset by the gateway)
+        // button presses: one pulse per press (counter, reset by the gateway). 4.2.3 (E6): the counter
+        // grows with every press until zigbee2mqtt restarts, and MaxVal is a validation in Loxone (a value
+        // above it becomes 0) - so the limit is the full range, not 1
         foreach (zng_action_values($device) as $value) {
             $entry["inputs"][] = array("title" => zng_title($name, "aktion_" . $value), "property" => "aktion/" . $value,
                 "type" => "action", "vi" => zng_gateway_name($topic . "/aktion/" . $value),
-                "udp" => $topic . "/aktion/" . $value, "unit" => "", "analog" => false, "min" => 0, "max" => 1,
+                "udp" => $topic . "/aktion/" . $value, "unit" => "", "analog" => false, "min" => 0, "max" => 2147483647,
                 "kachel" => zng_kachel($name, $value));
         }
         if ($availability) {
