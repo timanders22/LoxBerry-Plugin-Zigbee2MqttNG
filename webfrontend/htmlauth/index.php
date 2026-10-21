@@ -116,6 +116,8 @@ Plugin::createHeader(isset($zng_skripte[$zng_tab]) ? $zng_skripte[$zng_tab] : ar
 .sm-aus { color: #b00000; font-weight: 700; }
 .sm-breit { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
 .sm-breit .sm-tbl { margin: 0; min-width: 760px; }
+/* 4.2.4 (Gruppe 5): Kopierknopf der Namenstabelle (Bauart WOLF ISM NG 3.1.12, Waermepumpe 0.9.35). */
+.sm-wrap button.sm-kopie { font-size: 0.78em; padding: 1px 6px; margin-left: 4px; border: 1px solid #bbb; border-radius: 4px; background: #f5f5f5; color: #333; cursor: pointer; }
 .sm-wrap select {
     appearance: none; -webkit-appearance: none; -moz-appearance: none;
     background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%234f7d17' stroke-width='2'/%3E%3C/svg%3E");

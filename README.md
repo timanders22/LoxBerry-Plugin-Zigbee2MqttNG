@@ -8,6 +8,32 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.4
+
+Umstellung auf MQTT nach der Hausform (Gruppe 5): Werte in einfache Virtuelle Eingänge, Hakenliste für
+Gateway V2, Befehle weiter direkt an zigbee2mqtt.
+
+* **Hakenliste für Gateway V2** im Reiter „Einbindung in Loxone“, Schritt 2: je Gerät das Abo mit den
+  JSON-Feldern, erreichbar und je Tasterwert `…/aktion/<wert>` mit **Reset** – ohne Reset wirkt ein Taster
+  unter V2 nur beim ersten Druck. Für die zwei Musterseiten 11 Datenpunkte auf 7 Abos. Kein Datenpunkt
+  braucht „No Cache“.
+* **Namenstabelle** mit Kopierknopf (Schritt 3): je Wert ein einfacher Virtueller Eingang mit dem Namen, den
+  das Gateway vergibt. Die Vorlagen (virtueller HTTP- bzw. UDP-Eingang) stehen zugeklappt unter „Bestehende
+  Anlagen“.
+* **Gateway-Name mit Leerzeichen:** Plugin und Erweiterung ersetzen jetzt wie das Gateway auch Leerzeichen
+  durch `_` (bisher nur `/` und `%`). Für Geräte mit Leerzeichen im Namen stimmen Tabelle, Vorlage und
+  `mqtt_resetaftersend.cfg` damit erst jetzt; für Namen ohne Leerzeichen ändert sich nichts.
+* **Befehle in der publish-Form:** die Ausgangsvorlage schreibt `publish zigbee2mqtt/<Gerät>/set/<Eigenschaft>
+  <Wert>` wie die anderen Plugins; nur bei einem Leerzeichen in Thema oder Wert bleibt die JSON-Form. Wirkt
+  nur bei einem neuen Import. Befehle gehen weiter direkt an zigbee2mqtt (keine Befehlsbrücke): zigbee2mqtt
+  nimmt sie von jedem an, der am Broker schreiben darf – das Plugin kann das nicht abschalten.
+* **Nach dem Deinstallieren des Original-Plugins Zigbee2Mqtt** Zigbee2MqttNG einmal neu darüber installieren
+  (Upgrade-Weg, Daten bleiben): LoxBerry löscht beim Deinstallieren des Originals auch das
+  Deinstallationsskript dieses Plugins. Der Reiter Test prüft es („Ist das Deinstallationsskript da?“).
+* Musterseiten wortgleich zur Liste: Virtuelle Eingänge statt des HTTP-Behälters, die drei Befehle am
+  gemeinsamen Ausgang „LoxBerry MQTT-Gateway“ in der publish-Form. Die Gerätewerte kommen unverändert von
+  zigbee2mqtt (kein −1). Gerendert unter PHP 7.4, 8.4 und 8.5; nicht am Gerät gemessen.
+
 ## Neu in 4.2.3
 
 Einbindung in Loxone in Vollausstattung: zwei Seiten aus dem LoxBerry-Plugins Musterprojekt mit Bauanleitung

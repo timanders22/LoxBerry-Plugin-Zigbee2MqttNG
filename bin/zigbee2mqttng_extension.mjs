@@ -98,9 +98,10 @@ export function hausName(text) {
     return t.slice(0, 40).replace(/_+$/, "");
 }
 
-// Name of a value as the MQTT gateway forwards it: "/" and "%" become "_"
+// Name of a value as the MQTT gateway forwards it: "/", " " and "%" become "_"
+// (4.2.4, Entwurf zb E8: spaces too, as the gateway does; same result as zng_gateway_name() in zigbee2mqttng.php)
 export function gatewayName(topic) {
-    return String(topic).replace(/[/%]/g, "_");
+    return String(topic).replace(/[/ %]/g, "_");
 }
 
 function topicOk(name) {

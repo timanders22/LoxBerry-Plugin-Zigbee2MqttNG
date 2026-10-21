@@ -45,22 +45,49 @@
     <p>{% if registriert %}<span class="sm-ok">&#10004;</span> {{ 'Loxone.S2Ok' | trans | replace({'%d': abos}) }}{% else %}<span class="sm-fail">&#10008;</span> {{ 'Loxone.S2Fehlt' | trans }}{% endif %}</p>
     {% endif %}
     {% if gateway.version != 1 %}
+    {# 4.2.4 (Gruppe 5, Entwurf zb E5): Hakenliste fuer Gateway V2 mit JSON-Feldern und Reset fuer Taster #}
     <p>{{ 'Loxone.S2V2' | trans }}</p>
+    <div class="sm-warnung">{{ 'Loxone.S2Reset' | trans }}</div>
+    <p><b>{{ 'Loxone.S2Muster' | trans }}</b></p>
+    <div class="sm-breit">
+    <table class="sm-tbl">
+        <tr><th>{{ 'Loxone.Abo' | trans }}</th><th>{{ 'Loxone.JsonFelder' | trans }}</th><th>{{ 'Loxone.Reset' | trans }}</th><th>{{ 'Loxone.Name' | trans }}</th></tr>
+        {% for z in v2muster %}
+        <tr><td><code>{{ z.thema }}</code></td><td>{{ z.felder | join(', ') }}</td><td>{% if z.reset %}&#10004;{% endif %}</td><td><code>{{ z.namen | join(', ') }}</code></td></tr>
+        {% endfor %}
+    </table>
+    </div>
+    {% if v2liste|length > 1 %}
+    <p><b>{{ 'Loxone.S2Eigene' | trans }}</b></p>
+    <div class="sm-breit">
+    <table class="sm-tbl">
+        <tr><th>{{ 'Loxone.Abo' | trans }}</th><th>{{ 'Loxone.JsonFelder' | trans }}</th><th>{{ 'Loxone.Reset' | trans }}</th><th>{{ 'Loxone.Name' | trans }}</th></tr>
+        {% for z in v2liste %}{% if not z.gruppe %}
+        <tr><td><code>{{ z.thema }}</code></td><td>{{ z.felder | join(', ') }}</td><td>{% if z.reset %}&#10004;{% endif %}</td><td><code>{{ z.namen | join(', ') }}</code></td></tr>
+        {% endif %}{% endfor %}
+    </table>
+    </div>
+    {% if v2gruppen > 0 %}
+    <div data-role="collapsible" data-collapsed="true" data-mini="true">
+        <h3>{{ 'Loxone.Gruppen' | trans }}</h3>
+        <table class="sm-tbl">
+            {% for z in v2liste %}{% if z.gruppe %}
+            <tr><td><code>{{ z.thema }}</code></td><td>{{ z.felder | join(', ') }}</td><td><code>{{ z.namen | join(', ') }}</code></td></tr>
+            {% endif %}{% endfor %}
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+    <p class="hint">{{ 'Loxone.S2NoCache' | trans }}</p>
     {% endif %}
     {% endif %}
 </div>
 
 <div class="sm-step">
     <h3>{{ 'Loxone.S3' | trans }}</h3>
+    {# 4.2.4 (Gruppe 5): Namenstabelle je Geraet - Virtuelle Eingaenge statt Vorlage (Nachtrag 2 Gruppe 1, R2_078) #}
     <p>{{ 'Loxone.S3Text' | trans }}</p>
-    <p><b>{{ 'Loxone.Pflichtsatz' | trans }}</b></p>
-    <div class="sm-knopfreihe">
-        {% if gateway.use_http %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=inhttp">{{ 'Loxone.AllInputsHttp' | trans }}</a>{% endif %}
-        {% if gateway.use_udp and gateway.udpport %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=in">{{ 'Loxone.AllInputs' | trans }}</a>{% endif %}
-    </div>
-    {% if gateway.use_udp and not gateway.udpport %}<div class="sm-warnung">{{ 'Loxone.NoUdpPort' | trans }}</div>{% endif %}
-    <p class="hint">{{ 'Loxone.HintTemplates' | trans }} {{ 'Loxone.TextWerte' | trans | replace({'%d': textCount}) }}</p>
-    <p class="hint">{{ 'Loxone.EinzelOderAlle' | trans }}</p>
+    <p class="hint">{{ 'Loxone.S3Werte' | trans }}</p>
     {% if availability %}<p>{{ 'Loxone.Erreichbar' | trans }}: <code>{{ 'Loxone.ErreichbarText' | trans }}</code></p>{% endif %}
     {% if hasActions %}<p>{{ 'Loxone.Aktionen' | trans }}: <code>{{ 'Loxone.AktionenText' | trans }}</code></p>{% endif %}
 
@@ -73,6 +100,39 @@
     {% for device in devices %}
     <div data-role="collapsible" data-collapsed="true" data-mini="true">
         <h3>{{ device.name }} <small>{{ device.vendor }} {{ device.model }}</small></h3>
+        <table class="sm-tbl">
+            <tr>
+                <th>{{ 'Loxone.Name' | trans }}</th>
+                <th>{{ 'Loxone.Kachel' | trans }}</th>
+                <th>{{ 'Loxone.Bereich' | trans }}</th>
+                <th>{{ 'Loxone.Art' | trans }}</th>
+            </tr>
+            {% for in in device.inputs %}
+            <tr>
+                <td><code>{{ in.vi }}</code> <button data-role="none" type="button" class="sm-kopie" data-kopie="{{ in.vi }}">{{ 'Loxone.Kopieren' | trans }}</button></td>
+                <td>{{ in.kachel }}{% if in.type == 'action' %} - {{ 'Loxone.Pulse' | trans }}{% endif %}</td>
+                <td>{% if in.text %}{% else %}{{ in.min }} … {{ in.max }}{% if in.unit %} {{ in.unit }}{% endif %}{% endif %}</td>
+                <td>{% if in.text %}{{ 'Loxone.ArtText' | trans }}{% else %}{{ 'Loxone.ArtZahl' | trans }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endfor %}
+
+    <div data-role="collapsible" data-collapsed="true" data-mini="true">
+        <h3>{{ 'Loxone.Bestehend' | trans }}</h3>
+        <p>{{ 'Loxone.BestehendText' | trans }}</p>
+        <p>{{ 'Loxone.S3Alt' | trans }}</p>
+        <p><b>{{ 'Loxone.Pflichtsatz' | trans }}</b></p>
+        <div class="sm-knopfreihe">
+            {% if gateway.use_http %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=inhttp">{{ 'Loxone.AllInputsHttp' | trans }}</a>{% endif %}
+            {% if gateway.use_udp and gateway.udpport %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=in">{{ 'Loxone.AllInputs' | trans }}</a>{% endif %}
+        </div>
+        {% if gateway.use_udp and not gateway.udpport %}<div class="sm-warnung">{{ 'Loxone.NoUdpPort' | trans }}</div>{% endif %}
+        <p class="hint">{{ 'Loxone.HintTemplates' | trans }} {{ 'Loxone.TextWerte' | trans | replace({'%d': textCount}) }}</p>
+        <p class="hint">{{ 'Loxone.EinzelOderAlle' | trans }}</p>
+        {% for device in devices %}
+        <p>{{ device.name }}:</p>
         <div class="sm-knopfreihe">
             {% if gateway.use_http %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=inhttp&device={{ device.name | url_encode }}">{{ 'Loxone.InputsHttp' | trans }}</a>{% endif %}
             {% if gateway.use_udp and gateway.udpport %}<a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=in&device={{ device.name | url_encode }}">{{ 'Loxone.Inputs' | trans }}</a>{% endif %}
@@ -81,28 +141,39 @@
             {% endif %}
         </div>
         <table class="sm-tbl">
-            <tr>
-                <th>{{ 'Loxone.Name' | trans }}</th>
-                <th>{{ 'Loxone.Kachel' | trans }}</th>
-                <th>{{ 'Loxone.HttpName' | trans }}</th>
-                <th>{{ 'Loxone.UdpCheck' | trans }}</th>
-            </tr>
-            {% for in in device.inputs %}
-            <tr>
-                <td>{{ in.title }}{% if in.unit %} ({{ in.unit }}){% endif %}{% if in.text %} - {{ 'Loxone.Text' | trans }}{% endif %}{% if in.type == 'action' %} - {{ 'Loxone.Pulse' | trans }}{% endif %}</td>
-                <td>{{ in.kachel }}</td>
-                <td><code>{{ in.vi }}</code></td>
-                <td>{% if not in.text %}<code>{{ in.udp }}=\v</code>{% endif %}</td>
-            </tr>
-            {% endfor %}
+            <tr><th>{{ 'Loxone.HttpName' | trans }}</th><th>{{ 'Loxone.UdpCheck' | trans }}</th></tr>
+            {% for in in device.inputs %}{% if not in.text %}
+            <tr><td><code>{{ in.vi }}</code></td><td><code>{{ in.udp }}=\v</code></td></tr>
+            {% endif %}{% endfor %}
         </table>
+        {% endfor %}
     </div>
-    {% endfor %}
+    <script>
+    (function () {
+        document.querySelectorAll('.sm-kopie').forEach(function (k) {
+            k.addEventListener('click', function () {
+                var n = k.getAttribute('data-kopie');
+                var fertig = function () { k.textContent = {{ 'Loxone.Kopiert' | trans | json_encode | raw }}; };
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(n).then(fertig);
+                } else {
+                    var f = document.createElement('textarea');
+                    f.value = n; document.body.appendChild(f); f.select();
+                    try { document.execCommand('copy'); fertig(); } catch (e) {}
+                    document.body.removeChild(f);
+                }
+            });
+        });
+    })();
+    </script>
 </div>
 
 <div class="sm-step">
     <h3>{{ 'Loxone.S4' | trans }}</h3>
     <p>{{ 'Loxone.S4Text' | trans }} <code>/dev/udp/{{ loxberryIp }}/{{ gateway.udpinport }}</code></p>
+    {# 4.2.4 (Gruppe 5, Entwurf zb E1/E2): Befehle direkt an zigbee2mqtt, publish-Form, keine Bruecke #}
+    <p>{{ 'Loxone.S4Nichts' | trans }}</p>
+    <div class="sm-warnung">{{ 'Loxone.S4Sicher' | trans }}</div>
     <div class="sm-knopfreihe">
         <a data-role="none" data-ajax="false" class="sm-btn sm-b-technik" href="ajax.php?action=getTemplate&kind=out">{{ 'Loxone.AllOutputs' | trans }}</a>
     </div>
@@ -174,20 +245,20 @@
             <th>{{ 'Baustein.Parameter' | trans }}</th>
             <th>{{ 'Baustein.Eingaenge' | trans }}</th>
         </tr>
-        <tr><td>1</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S1_01_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_01_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>1</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S1_01_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_01_PARAM' | trans }}</td><td>—</td></tr>
         <tr><td>2</td><td>{{ 'Baustein.T_VALID' | trans }}</td><td>{{ 'Baustein.S1_02_NAME' | trans }}</td><td>{{ 'Baustein.S1_02_PARAM' | trans }}</td><td>V = #1, En = #8</td></tr>
-        <tr><td>3</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S1_03_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_03_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>3</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S1_03_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_03_PARAM' | trans }}</td><td>—</td></tr>
         <tr><td>4</td><td>{{ 'Baustein.T_NICHT' | trans }}</td><td>{{ 'Baustein.S1_04_NAME' | trans }}</td><td>–</td><td>I = #3</td></tr>
         <tr><td>5</td><td>{{ 'Baustein.T_ODER' | trans }}</td><td>{{ 'Baustein.S1_05_NAME' | trans }}</td><td>–</td><td>{{ 'Baustein.S1_05_EIN' | trans }}</td></tr>
         <tr><td>6</td><td>{{ 'Baustein.T_EVZ' | trans }}</td><td>{{ 'Baustein.S1_06_NAME' | trans }}</td><td>{{ 'Baustein.S1_06_PARAM' | trans }}</td><td>{{ 'Baustein.S1_06_EIN' | trans }}</td></tr>
         <tr><td>7</td><td>{{ 'Baustein.T_BENACHR' | trans }}</td><td>{{ 'Baustein.S1_07_NAME' | trans }}</td><td>{{ 'Baustein.S1_07_PARAM' | trans }}</td><td>{{ 'Baustein.S1_07_EIN' | trans }}</td></tr>
         <tr><td>8</td><td>{{ 'Baustein.T_KONSTANTE' | trans }}</td><td>{{ 'Baustein.S1_08_NAME' | trans }}</td><td>{{ 'Baustein.S1_08_PARAM' | trans }}</td><td>–</td></tr>
-        <tr><td>9</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S1_09_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_09_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>9</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S1_09_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_09_PARAM' | trans }}</td><td>—</td></tr>
         <tr><td>10</td><td>{{ 'Baustein.T_NICHT' | trans }}</td><td>{{ 'Baustein.S1_10_NAME' | trans }}</td><td>—</td><td>I = #9</td></tr>
         <tr><td>11</td><td>{{ 'Baustein.T_ODER' | trans }}</td><td>{{ 'Baustein.S1_11_NAME' | trans }}</td><td>{{ 'Baustein.S1_11_PARAM' | trans }}</td><td>I1 = #5, I2 = #10</td></tr>
-        <tr><td>12</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S1_12_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_12_PARAM' | trans }}</td><td>—</td></tr>
-        <tr><td>13</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S1_13_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_13_PARAM' | trans }}</td><td>—</td></tr>
-        <tr><td>14</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S1_14_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_14_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>12</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S1_12_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_12_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>13</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S1_13_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_13_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>14</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S1_14_NAME' | trans }}</code></td><td>{{ 'Baustein.S1_14_PARAM' | trans }}</td><td>—</td></tr>
         <tr><td>15</td><td>{{ 'Baustein.T_STATUS' | trans }}</td><td>{{ 'Baustein.S1_15_NAME' | trans }}</td><td>{{ 'Baustein.S1_15_PARAM' | trans }}</td><td>{{ 'Baustein.S1_15_EIN' | trans }}</td></tr>
     </table>
     <p class="hint">{{ 'Baustein.Zu2' | trans }}</p>
@@ -223,24 +294,24 @@
             <th>{{ 'Baustein.Parameter' | trans }}</th>
             <th>{{ 'Baustein.Eingaenge' | trans }}</th>
         </tr>
-        <tr><td>1</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S2_01_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_01_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>1</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S2_01_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_01_PARAM' | trans }}</td><td>—</td></tr>
         <tr><td>2</td><td>{{ 'Baustein.T_VE_TASTE' | trans }}</td><td>{{ 'Baustein.S2_02_NAME' | trans }}</td><td>{{ 'Baustein.S2_02_PARAM' | trans }}</td><td>—</td></tr>
         <tr><td>3</td><td>{{ 'Baustein.T_ODER' | trans }}</td><td>{{ 'Baustein.S2_03_NAME' | trans }}</td><td>{{ 'Baustein.S2_03_PARAM' | trans }}</td><td>I1 = #1, I2 = #2</td></tr>
-        <tr><td>4</td><td>{{ 'Baustein.T_VQ' | trans }}</td><td><code>{{ 'Baustein.S2_04_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_04_PARAM' | trans }}</td><td>{{ 'Baustein.S2_04_EIN' | trans }}</td></tr>
+        <tr><td>4</td><td>{{ 'Baustein.T_VA' | trans }}</td><td>{{ 'Baustein.S2_04_NAME' | trans }}</td><td>{{ 'Baustein.S2_04_PARAM' | trans }}</td><td>{{ 'Baustein.S2_04_EIN' | trans }}</td></tr>
         <tr><td>5</td><td>{{ 'Baustein.T_VE_SCHALTER' | trans }}</td><td>{{ 'Baustein.S2_05_NAME' | trans }}</td><td>{{ 'Baustein.S2_05_PARAM' | trans }}</td><td>—</td></tr>
         <tr><td>6</td><td>{{ 'Baustein.T_NICHT' | trans }}</td><td>{{ 'Baustein.S2_06_NAME' | trans }}</td><td>—</td><td>I = #5</td></tr>
-        <tr><td>7</td><td>{{ 'Baustein.T_VQ' | trans }}</td><td><code>{{ 'Baustein.S2_07_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_07_PARAM' | trans }}</td><td>{{ 'Baustein.S2_07_EIN' | trans }}</td></tr>
-        <tr><td>8</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S2_08_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_08_PARAM' | trans }}</td><td>—</td></tr>
-        <tr><td>9</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S2_09_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_09_PARAM' | trans }}</td><td>—</td></tr>
-        <tr><td>10</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S2_10_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_10_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>7</td><td>{{ 'Baustein.T_VA' | trans }}</td><td>{{ 'Baustein.S2_07_NAME' | trans }}</td><td>{{ 'Baustein.S2_07_PARAM' | trans }}</td><td>{{ 'Baustein.S2_07_EIN' | trans }}</td></tr>
+        <tr><td>8</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S2_08_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_08_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>9</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S2_09_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_09_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>10</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S2_10_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_10_PARAM' | trans }}</td><td>—</td></tr>
         <tr><td>11</td><td>{{ 'Baustein.T_STATUS' | trans }}</td><td>{{ 'Baustein.S2_11_NAME' | trans }}</td><td>{{ 'Baustein.S2_11_PARAM' | trans }}</td><td>V1 = #8, V2 = #9, V3 = #10</td></tr>
-        <tr><td>12</td><td>{{ 'Baustein.T_VHI' | trans }}</td><td><code>{{ 'Baustein.S2_12_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_12_PARAM' | trans }}</td><td>—</td></tr>
+        <tr><td>12</td><td>{{ 'Baustein.T_VE' | trans }}</td><td><code>{{ 'Baustein.S2_12_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_12_PARAM' | trans }}</td><td>—</td></tr>
         <tr><td>13</td><td>{{ 'Baustein.T_NICHT' | trans }}</td><td>{{ 'Baustein.S2_13_NAME' | trans }}</td><td>—</td><td>I = #12</td></tr>
         <tr><td>14</td><td>{{ 'Baustein.T_UND' | trans }}</td><td>{{ 'Baustein.S2_14_NAME' | trans }}</td><td>—</td><td>I1 = #13, I2 = #5</td></tr>
         <tr><td>15</td><td>{{ 'Baustein.T_EVZ' | trans }}</td><td>{{ 'Baustein.S2_15_NAME' | trans }}</td><td>{{ 'Baustein.S2_15_PARAM' | trans }}</td><td>{{ 'Baustein.S2_15_EIN' | trans }}</td></tr>
         <tr><td>16</td><td>{{ 'Baustein.T_BENACHR' | trans }}</td><td>{{ 'Baustein.S2_16_NAME' | trans }}</td><td>{{ 'Baustein.S2_16_PARAM' | trans }}</td><td>{{ 'Baustein.S2_16_EIN' | trans }}</td></tr>
         <tr><td>17</td><td>{{ 'Baustein.T_VE_REGLER' | trans }}</td><td>{{ 'Baustein.S2_17_NAME' | trans }}</td><td>{{ 'Baustein.S2_17_PARAM' | trans }}</td><td>—</td></tr>
-        <tr><td>18</td><td>{{ 'Baustein.T_VQ' | trans }}</td><td><code>{{ 'Baustein.S2_18_NAME' | trans }}</code></td><td>{{ 'Baustein.S2_18_PARAM' | trans }}</td><td>{{ 'Baustein.S2_18_EIN' | trans }}</td></tr>
+        <tr><td>18</td><td>{{ 'Baustein.T_VA' | trans }}</td><td>{{ 'Baustein.S2_18_NAME' | trans }}</td><td>{{ 'Baustein.S2_18_PARAM' | trans }}</td><td>{{ 'Baustein.S2_18_EIN' | trans }}</td></tr>
     </table>
     <p class="hint">{{ 'Baustein.S2_H1' | trans }}</p>
     <p class="hint">{{ 'Baustein.S2_H2' | trans }}</p>

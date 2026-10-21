@@ -46,11 +46,14 @@ function zng_topic_ok($name)
 
 /**
  * Name of a value as the MQTT gateway forwards it (virtual HTTP input,
- * mqtt_resetaftersend.cfg): "/" and "%" become "_", nothing else changes.
+ * mqtt_resetaftersend.cfg): "/", " " and "%" become "_", nothing else changes.
+ * 4.2.4 (Gruppe 5, Entwurf zb E8): spaces too, as the gateway does (V2 build_vi_name; V1 the same) - until
+ * 4.2.3 a device "Flur Taster" got a wrong name in table, template and mqtt_resetaftersend.cfg.
+ * Must give the same result as gatewayName() in zigbee2mqttng_extension.mjs.
  */
 function zng_gateway_name($topic)
 {
-    return str_replace(array("/", "%"), "_", (string) $topic);
+    return str_replace(array("/", " ", "%"), "_", (string) $topic);
 }
 
 /**
@@ -983,12 +986,16 @@ function zng_payload($value)
 }
 
 /**
- * Command for the UDP input of the MQTT gateway. The JSON form keeps topics
- * with spaces intact - the plain form "publish <topic> <value>" is split at
- * every space by the gateway.
+ * Command for the UDP input of the MQTT gateway. 4.2.4 (Gruppe 5, Entwurf zb E2): the plain form
+ * "publish <topic> <value>" like all other plugins (measured under gateway V2 in groups 1-4) - unless the topic
+ * or the value contains a space: the gateway splits the plain form at every space, so then the JSON form, which
+ * keeps them intact. Never retained: a retained /set would switch again at every restart of zigbee2mqtt.
  */
 function zng_udp_command($topic, $value)
 {
+    if (preg_match('/\s/', (string) $topic . (string) $value) !== 1) {
+        return "publish " . $topic . " " . $value;
+    }
     return json_encode(array("topic" => $topic, "value" => $value), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 }
 
@@ -1072,8 +1079,9 @@ function zng_xml_virtual_in_http($title, $inputs, $comment)
 }
 
 /**
- * Virtual output: commands go as {"topic":...,"value":...} to the UDP input
- * of the MQTT gateway on the LoxBerry.
+ * Virtual output: commands go as "publish <topic> <value>" to the UDP input
+ * of the MQTT gateway on the LoxBerry (4.2.4; the JSON form {"topic":...,"value":...}
+ * only for a space in topic or value, see zng_udp_command()).
  */
 function zng_xml_virtual_out($title, $address, $outputs, $comment = "")
 {
@@ -1262,4 +1270,110 @@ function zng_vorlage($kind, $device)
         return array("VQ_" . $file . ".xml", $xml, count($outputs));
     }
     return array(null, "kind", 0);
+}
+
+/**
+ * 4.2.4 (Gruppe 5 / MQTT, Entwurf zb E5): the tick list for MQTT gateway version 2. Version 2 does not read the
+ * .cfg files of the plugin (mqtt_subscriptions.cfg, mqtt_resetaftersend.cfg); the user ticks each data point on
+ * the subscription page of the gateway. Same device selection as zng_subscription_lines():
+ *   - the heartbeat counter <base>/zigbee2mqttng/zaehler (ts is not needed by the sample pages);
+ *   - per device <base>/<device> with "JSON" on and the readable number and yes/no fields (access & 1, no action,
+ *     no text values), one gateway name per field;
+ *   - <base>/<device>/erreichbar with availability;
+ *   - per button value <base>/<device>/aktion/<value> with "Reset" on (otherwise a button works only once);
+ *   - groups <base>/<group> with the JSON field state (marked "gruppe", shown collapsed).
+ * Each row: thema, json (bool), felder (list), reset (bool), namen (gateway names), gruppe (bool).
+ */
+function zng_v2_liste($base, $devices, $availability, $groups = array())
+{
+    $rows = array();
+    $t = $base . "/" . ZNG_LEBENSZEICHEN . "/zaehler";
+    $rows[] = array("thema" => $t, "json" => false, "felder" => array(), "reset" => false,
+        "namen" => array(zng_gateway_name($t)), "gruppe" => false);
+    foreach (zng_device_ios($base, $devices, $availability) as $d) {
+        $topic = $base . "/" . $d["name"];
+        $felder = array();
+        $namen = array();
+        $aktionen = array();
+        $erreichbar = null;
+        foreach ($d["inputs"] as $in) {
+            if ($in["type"] === "action") {
+                $aktionen[] = $in;
+            } elseif ($in["property"] === "erreichbar") {
+                $erreichbar = $in;
+            } elseif (empty($in["text"])) {
+                $felder[] = $in["property"];
+                $namen[] = $in["vi"];
+            }
+        }
+        if ($felder) {
+            $rows[] = array("thema" => $topic, "json" => true, "felder" => $felder, "reset" => false,
+                "namen" => $namen, "gruppe" => false);
+        }
+        if ($erreichbar !== null) {
+            $rows[] = array("thema" => $erreichbar["udp"], "json" => false, "felder" => array(), "reset" => false,
+                "namen" => array($erreichbar["vi"]), "gruppe" => false);
+        }
+        foreach ($aktionen as $in) {
+            $rows[] = array("thema" => $in["udp"], "json" => false, "felder" => array(), "reset" => true,
+                "namen" => array($in["vi"]), "gruppe" => false);
+        }
+    }
+    foreach ((array) $groups as $group) {
+        if (isset($group["friendly_name"]) && zng_topic_ok($group["friendly_name"])) {
+            $g = $base . "/" . $group["friendly_name"];
+            $rows[] = array("thema" => $g, "json" => true, "felder" => array("state"), "reset" => false,
+                "namen" => array(zng_gateway_name($g . "/state")), "gruppe" => true);
+        }
+    }
+    return $rows;
+}
+
+/**
+ * 4.2.4 (Entwurf zb 2.4): the 11 data points on 7 subscriptions the two sample pages "Zigbee2MqttNG" and
+ * "Zigbee2MqttNG Geraete" need (Musterprojekt/baustein_listen.txt). Fixed device names of the sample project.
+ */
+function zng_v2_muster($base)
+{
+    $muster = array(
+        array(ZNG_LEBENSZEICHEN . "/zaehler", array(), false),
+        array("Wohnzimmer_Sensor", array("temperature", "humidity", "battery"), false),
+        array("Wohnzimmer_Sensor/erreichbar", array(), false),
+        array("Wohnzimmer_Steckdose", array("state", "power", "energy"), false),
+        array("Wohnzimmer_Steckdose/erreichbar", array(), false),
+        array("Wohnzimmer_Fenster", array("contact"), false),
+        array("Flur_Taster/aktion/single", array(), true),
+    );
+    $rows = array();
+    foreach ($muster as $m) {
+        $t = $base . "/" . $m[0];
+        $namen = array();
+        foreach ($m[1] ?: array(null) as $f) {
+            $namen[] = zng_gateway_name($f === null ? $t : $t . "/" . $f);
+        }
+        $rows[] = array("thema" => $t, "json" => (bool) $m[1], "felder" => $m[1], "reset" => $m[2], "namen" => $namen,
+            "gruppe" => false);
+    }
+    return $rows;
+}
+
+/**
+ * 4.2.4 (Entwurf zb E5): check of the tick list - every name equals the topic (plus "/" field) with "/", " " and
+ * "%" replaced by "_", computed here WITHOUT zng_gateway_name(). Returns the list of names that differ.
+ */
+function zng_v2_namen_abweichend($rows)
+{
+    $falsch = array();
+    foreach ($rows as $r) {
+        $soll = array();
+        foreach ($r["json"] ? $r["felder"] : array(null) as $f) {
+            $soll[] = preg_replace('#[/ %]#', "_", $f === null ? $r["thema"] : $r["thema"] . "/" . $f);
+        }
+        foreach ($r["namen"] as $i => $n) {
+            if (!isset($soll[$i]) || $soll[$i] !== $n) {
+                $falsch[] = $n;
+            }
+        }
+    }
+    return $falsch;
 }

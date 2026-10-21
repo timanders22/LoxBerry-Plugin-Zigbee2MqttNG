@@ -240,7 +240,7 @@ function zng_bereich_mqtt($twig)
 /** Reiter Einbindung in Loxone (bis 4.1.1 loxone.php) */
 function zng_bereich_loxone($twig)
 {
-    global $bridgeDevicesFile, $mqttGatewaySubscriptionFile;
+    global $bridgeDevicesFile, $mqttGatewaySubscriptionFile, $bridgeGroupsFile;
     $mqttcfg = MqttConfig::load();
     $serviceCfg = ServiceConfig::load();
     $availability = is_enabled($serviceCfg->availability);
@@ -283,6 +283,8 @@ function zng_bereich_loxone($twig)
         }
     }
     $lebenszeichen = zng_lebenszeichen_ios($mqttcfg->topic);
+    $v2liste = zng_v2_liste($mqttcfg->topic, zng_read_json($bridgeDevicesFile, array()), $availability,
+                            zng_read_json($bridgeGroupsFile, array()));
 
     echo $twig->render('loxone.html', array(
         "devices" => $devices,
@@ -301,6 +303,10 @@ function zng_bereich_loxone($twig)
         })) > 0,
         "lebenszeichen" => $lebenszeichen,
         "beispiel" => $beispiel,
+        // 4.2.4 (Gruppe 5, Entwurf zb E5): Hakenliste fuer Gateway V2 - eigene Geraete und die zwei Musterseiten
+        "v2liste" => $v2liste,
+        "v2gruppen" => count(array_filter($v2liste, function ($r) { return $r["gruppe"]; })),
+        "v2muster" => zng_v2_muster($mqttcfg->topic),
     ));
 }
 
@@ -484,9 +490,62 @@ function statusRows()
     $rows[] = heartbeatRow($status, $service["pid"]);
     $rows = array_merge($rows, konfigRows());
     $rows[] = vorlagenRow();
+    // 4.2.4 (Gruppe 5, Entwurf zb E5/E6): Namen der Hakenliste, Deinstallationsskript (Praefixfall)
+    $rows[] = namenRow($mqttcfg, $serviceCfg);
+    $rows[] = uninstallRow();
     // 4.2.0: Reiterleiste, Bereiche und Positivliste in index.php
     $rows[] = zng_reiterprobe(__DIR__ . "/index.php");
     return $rows;
+}
+
+/**
+ * 4.2.4 (Gruppe 5, Entwurf zb E5): every name of the tick list equals the topic (plus field) with "/", " " and
+ * "%" replaced by "_" (computed without zng_gateway_name()), and mqtt_resetaftersend.cfg - written by the
+ * extension with gatewayName() in JS - equals zng_reset_lines() in PHP: the two name functions agree.
+ */
+function namenRow($mqttcfg, $serviceCfg)
+{
+    global $L, $bridgeDevicesFile, $bridgeGroupsFile, $mqttGatewayResetFile;
+    $devices = zng_read_json($bridgeDevicesFile, array());
+    $liste = zng_v2_liste($mqttcfg->topic, $devices, is_enabled($serviceCfg->availability),
+                          zng_read_json($bridgeGroupsFile, array()));
+    $falsch = zng_v2_namen_abweichend($liste);
+    $n = 0;
+    foreach ($liste as $r) {
+        $n += count($r["namen"]);
+    }
+    if ($falsch) {
+        return statusRow("Test.Namen", "fail", sprintf($L["Test.NamenFehl"], implode(", ", $falsch)));
+    }
+    if (!is_readable($mqttGatewayResetFile)) {
+        return statusRow("Test.Namen", "ok", sprintf($L["Test.NamenOhneDatei"], $n));
+    }
+    $ist = trim((string) file_get_contents($mqttGatewayResetFile));
+    $soll = trim(zng_reset_lines($mqttcfg->topic, $devices));
+    if ($ist !== $soll) {
+        return statusRow("Test.Namen", "hint", sprintf($L["Test.NamenFehl"], "mqtt_resetaftersend.cfg"));
+    }
+    return statusRow("Test.Namen", "ok", sprintf($L["Test.NamenOk"], $n));
+}
+
+/**
+ * 4.2.4 (Gruppe 5, Entwurf zb E6): the uninstall script of this plugin. Uninstalling the original plugin
+ * "zigbee2mqtt" makes LoxBerry delete data/system/uninstall/zigbee2mqtt* - this script too (plugininstall.pl
+ * :1570/:1603, prefix). The guard in uninstall/uninstall (since 4.1.1) stops it from RUNNING, not from being
+ * deleted. Whether the user loxberry may read the folder is not measured - unreadable is "not checkable".
+ */
+function uninstallRow()
+{
+    global $L;
+    $ordner = LBHOMEDIR . "/data/system/uninstall";
+    $datei = $ordner . "/" . LBPPLUGINDIR;
+    if (is_file($datei)) {
+        return statusRow("Test.Uninstall", "ok", sprintf($L["Test.UninstallOk"], $datei));
+    }
+    if (!is_dir($ordner) || !is_readable($ordner)) {
+        return statusRow("Test.Uninstall", "info", sprintf($L["Test.UninstallUnlesbar"], $ordner));
+    }
+    return statusRow("Test.Uninstall", "fail", sprintf($L["Test.UninstallFehlt"], $datei));
 }
 
 /**
