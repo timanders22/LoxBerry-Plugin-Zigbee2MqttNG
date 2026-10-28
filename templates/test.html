@@ -8,7 +8,8 @@
 
 {% import 'macros.html' as m %}
 <p class="sm-hilfe">{{ 'Test.Desc' | trans }}</p>
-{{ m.legende(['lesen']) }}
+{{ einmal | raw }}
+{{ m.legende(['lesen', 'aktion']) }}
 
 <p class="hint">
     <span class="sm-ok">&#10004;</span> {{ 'Test.LegendOk' | trans }} &nbsp;
@@ -33,3 +34,7 @@
     <span class="hint">{{ 'Test.Updated' | trans }} {{ time }}</span>
     <a data-role="none" href="index.php?form=test" class="sm-btn sm-b-lesen" data-ajax="false">{{ 'Test.Refresh' | trans }}</a>
 </div>
+
+{# 4.2.5 (Gruppe 38, E2): orange - they send something #}
+<h3>{{ 'Test.SchaltenTitel' | trans }}</h3>
+{{ schalten_html | raw }}

@@ -104,6 +104,31 @@ function dienstText(a) {
 }
 
 /**
+ * 4.2.5 (Gruppe 38, V10/E1): what happened to the house topics after saving
+ * (a family switched off, a device deselected) - texts from #haustexte
+ */
+function hausText(a) {
+    const box = $("#haustexte");
+    if (!a || !Array.isArray(a.haus) || box.length === 0) {
+        return "";
+    }
+    const teile = a.haus.map(function (h) {
+        const wer = h.familie + ((h.nur || []).length ? " (" + h.nur.join(", ") + ")" : "");
+        if (h.lage === "geleert") {
+            return String(box.data("geleert")).replace("%s", wer).replace("%d", h.themen);
+        }
+        if (h.lage === "nichts") {
+            return String(box.data("nichts")).replace("%s", wer);
+        }
+        if (h.lage === "rest") {
+            return String(box.data("rest")).replace("%s", wer).replace("%t", (h.offen || []).join(", "));
+        }
+        return String(box.data("keinbroker")).replace("%s", wer);
+    });
+    return teile.join(" ");
+}
+
+/**
  * Shows the validation errors of the backend and marks the fields
  * @param {object} answer {errors: [{field, message}]}
  */
@@ -140,14 +165,19 @@ function saveAndApply(forms) {
         .then(function () {
             return applyChanges().then(function (answer) {
                 $(".submitting").hide();
-                if (answer && answer.ok) {
+                const haus = hausText(answer);
+                if (answer && answer.ok && haus === "") {
                     $(".saveok").show();
                     $(".savedienst").css("color", "green").text(" " + dienstText(answer));
                     setTimeout(function () { location.reload(); }, 1500);
+                } else if (answer && answer.ok) {
+                    // 4.2.5: the result of clearing the house topics stays readable - no reload
+                    $(".saveok").show();
+                    $(".savedienst").css("color", "green").text(" " + dienstText(answer) + " " + haus);
                 } else {
                     // saved, but the service does not run - no reload, the
                     // message stays
-                    $(".savedienst").css("color", "red").text($("#dienstmeldungen").data("gespeichert") + " " + dienstText(answer));
+                    $(".savedienst").css("color", "red").text($("#dienstmeldungen").data("gespeichert") + " " + dienstText(answer) + " " + hausText(answer));
                 }
             }, function () {
                 $(".submitting").hide();

@@ -4,7 +4,10 @@ require_once "loxberry_system.php";
 require_once LBPBINDIR . "/formHelper.php";
 require_once LBPBINDIR . "/defines.php";
 
-require __DIR__ . '/vendor/autoload.php';
+// 4.2.5 (Gruppe 38, U7): Twig 3.11.3 liegt im Repo unter vendor_twig/ - ein Ordner vendor/
+// kaeme wegen der .gitignore weder ins Tag-Archiv noch in packen.py; bis 4.2.4 trug nur
+// das Release-Asset des Workflows ein vendor/.
+require __DIR__ . '/vendor_twig/autoload.php';
 
 /**
  * Plugin helper class

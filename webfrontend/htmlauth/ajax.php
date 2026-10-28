@@ -14,7 +14,15 @@ $log = LBLog::newLog(["name" => "Service"]);
 
 if (isset($_GET["action"])) {
     $action = $_GET["action"];
-    if (!requestFromPluginPage($action)) {
+    $herkunft = requestFromPluginPage($action);
+    if ($herkunft === "fremd") {
+        // 4.2.5 (V8): a download of secrets requested from another site
+        LOGWARN("$action refused: requested from another site (Sec-Fetch-Site " . substr(preg_replace('/[^a-z\-]/', '', (string) $_SERVER["HTTP_SEC_FETCH_SITE"]), 0, 20) . ")");
+        header("Content-Type: text/plain; charset=utf-8", true, 403);
+        echo (isset($L["Common.FremdeSeite"]) ? $L["Common.FremdeSeite"] : "Request from another site refused") . "\n";
+        exit(0);
+    }
+    if (!$herkunft) {
         sendresponse(403, "application/json", '{"result":false,"error":"request not accepted"}');
     }
     if ($action == "getFormData") {
@@ -67,9 +75,19 @@ if (isset($_GET["action"])) {
  * backupSettings (4.1.1): the browser saves the file, another site cannot
  * read it - the same as the zigbee2mqtt backup (backupNetwork, up to
  * 4.1.1 the page backup.php).
+ * 4.2.5 (Gruppe 38, V8, T2-3): the two downloads carry secrets (broker
+ * password, network key). A browser names the origin of a request in
+ * Sec-Fetch-Site; a link on another site ("cross-site", "same-site") is
+ * refused with 403. "same-origin" (the plugin page) and "none" (typed into
+ * the address bar, a bookmark) pass. Without the header (old browsers) it
+ * stays as before.
  */
 function requestFromPluginPage($action)
 {
+    if (in_array($action, array("backupNetwork", "backupSettings"), true) && isset($_SERVER["HTTP_SEC_FETCH_SITE"])
+        && !in_array($_SERVER["HTTP_SEC_FETCH_SITE"], array("same-origin", "none"), true)) {
+        return "fremd";
+    }
     $changing = array("setFormData", "setDevices", "applyChanges", "permitJoin", "testPort", "networkMap", "restoreSettings", "serviceAction");
     $protected = array_merge($changing, array("getFormData"));
     if (!in_array($action, $protected, true)) {
@@ -88,8 +106,36 @@ function applyChanges()
 {
     LOGSTART("Restart zigbee2mqtt service");
     $ergebnis = zng_aenderungen_anwenden();
+    // 4.2.5 (Gruppe 38, V10/E1): a family switched off or a device deselected -
+    // its retained topics are removed with read back, the result goes to the form
+    $ergebnis["haus"] = zng_haus_aufraeumen_melden();
     LOGEND("Restart zigbee2mqtt service finished");
     return json_encode(array_merge(array("result" => $ergebnis["ok"]), $ergebnis));
+}
+
+/**
+ * 4.2.5 (V10/E1): zng_haus_aufraeumen() with one log line per family and a
+ * short form for the page: array(array(familie, lage, themen, offen, nur)).
+ */
+function zng_haus_aufraeumen_melden()
+{
+    $liste = array();
+    foreach (zng_haus_aufraeumen() as $a) {
+        $e = $a["ergebnis"];
+        $wer = "haus/" . $a["familie"] . ($a["nur"] ? " (" . implode(", ", $a["nur"]) . ")" : "");
+        if ($e["lage"] === "geleert") {
+            LOGOK("$wer: cleared (confirmed by the broker, " . $e["themen"] . " topics)");
+        } elseif ($e["lage"] === "nichts") {
+            LOGINF("$wer: nothing to clear");
+        } elseif ($e["lage"] === "rest") {
+            LOGWARN("$wer: still retained - please clear by hand: " . implode(", ", $e["offen"]));
+        } else {
+            LOGWARN("$wer: broker not reachable (" . $e["grund"] . ") - cleared again on the next save and on uninstall");
+        }
+        $liste[] = array("familie" => $a["familie"], "lage" => $e["lage"], "themen" => $e["themen"], "offen" => $e["offen"],
+            "nur" => $a["nur"]);
+    }
+    return $liste;
 }
 
 /**
@@ -205,9 +251,26 @@ function setFormData($form, $formData)
         LOGEND("Save");
     }
 
+    $errors = array();
+    // 4.2.5 (Gruppe 38, E1): the table "Devices for the house topics" (hidden
+    // index with IEEE, checked against the device list). Without the table the
+    // saved areas stay. A device twice (klima AND wetter) is refused.
+    if ($form == "MqttConfig") {
+        global $bridgeDevicesFile;
+        $values["hausBereiche"] = is_array($saved->hausBereiche) ? $saved->hausBereiche : array();
+        $values["hausAlarmAus"] = is_array($saved->hausAlarmAus) ? $saved->hausAlarmAus : array();
+        if (isset($formData["hausGeraet"])) {
+            list($hf, $hb, $ha) = zng_haus_bereiche_lesen($formData, zng_read_json($bridgeDevicesFile, array()));
+            foreach ($hf as $key) {
+                $errors[] = array("form" => $form, "message" => isset($L[$key]) ? $L[$key] : $key, "field" => "hausBereiche");
+            }
+            $gezeigt = array_values(array_filter((array) $formData["hausGeraet"], "zng_ieee_ok"));
+            $values["hausBereiche"] = array_merge($values["hausBereiche"], $hb);
+            $values["hausAlarmAus"] = array_values(array_unique(array_merge(array_diff($values["hausAlarmAus"], $gezeigt), $ha)));
+        }
+    }
     $data = MakeObjectFromArray($class, $values);
     $data->keepFrom($saved);
-    $errors = array();
     foreach ($data->validate() as $key) {
         $errors[] = array("form" => $form, "message" => isset($L[$key]) ? $L[$key] : $key);
     }
@@ -239,7 +302,14 @@ function setDevices()
         sendresponse(400, "application/json", json_encode(array("result" => false, "error" => $L["Devices.YamlInvalid"])));
     }
 
-    file_put_contents($deviceDataFile, $data);
+    // 4.2.5 (Gruppe 38, V2, T2-1): in one piece (temporary file + rename) and
+    // checked - until 4.2.4 a full disk left a cut-off devices.yaml and the
+    // answer still said "Update OK". The file holds nothing secret: 0644.
+    if (!zng_schreiben_atomar($deviceDataFile, $data, 0644)) {
+        LOGERR("devices.yaml could not be written (disk full or no permission) - the previous file is unchanged");
+        LOGEND("Update failed");
+        sendresponse(500, "application/json", json_encode(array("result" => false, "error" => isset($L["Devices.NichtGespeichert"]) ? $L["Devices.NichtGespeichert"] : "devices.yaml not written")));
+    }
     LOGOK("Update OK");
     LOGEND("Update finished");
     sendresponse(200, "application/json", '{"result":true}');
@@ -280,6 +350,12 @@ function zng_radio_info()
         "wifiInterface" => $wifiInterface,
         "wifiLevel" => zng_wifi_overlap($zigbee, $wifi),
         "predecessors" => zng_predecessor_plugins(),
+        // 4.2.5 (Gruppe 38, E5): which of 15, 20, 25 fits - only a sentence, no button
+        "vorschlag" => zng_kanal_vorschlag($zigbee, $thread, $wifi),
+        "kanalSatz" => zng_kanal_satz($zigbee, $thread, $wifi, function ($k) {
+            global $L;
+            return isset($L[$k]) ? $L[$k] : $k;
+        })[1],
     );
 }
 
@@ -338,7 +414,12 @@ function networkMap()
         return json_encode(array("result" => false, "message" => "refused", "error" => isset($answer["error"]) ? (string) $answer["error"] : ""));
     }
     $nodes = array();
-    foreach ($answer["data"]["value"]["nodes"] as $node) {
+    foreach ((array) $answer["data"]["value"]["nodes"] as $node) {
+        // 4.2.5 (V8, T2-4): a node without IEEE address is skipped, an answer
+        // without links gives an empty list - no warning in the answer
+        if (!is_array($node) || !isset($node["ieeeAddr"])) {
+            continue;
+        }
         $nodes[] = array(
             "id" => $node["ieeeAddr"],
             "name" => isset($node["friendlyName"]) ? $node["friendlyName"] : $node["ieeeAddr"],
@@ -347,10 +428,16 @@ function networkMap()
         );
     }
     $links = array();
-    foreach ($answer["data"]["value"]["links"] as $link) {
+    $roh = isset($answer["data"]["value"]["links"]) && is_array($answer["data"]["value"]["links"]) ? $answer["data"]["value"]["links"] : array();
+    foreach ($roh as $link) {
+        $quelle = isset($link["source"]["ieeeAddr"]) ? $link["source"]["ieeeAddr"] : (isset($link["sourceIeeeAddr"]) ? $link["sourceIeeeAddr"] : null);
+        $ziel = isset($link["target"]["ieeeAddr"]) ? $link["target"]["ieeeAddr"] : (isset($link["targetIeeeAddr"]) ? $link["targetIeeeAddr"] : null);
+        if ($quelle === null || $ziel === null) {
+            continue;
+        }
         $links[] = array(
-            "source" => isset($link["source"]["ieeeAddr"]) ? $link["source"]["ieeeAddr"] : $link["sourceIeeeAddr"],
-            "target" => isset($link["target"]["ieeeAddr"]) ? $link["target"]["ieeeAddr"] : $link["targetIeeeAddr"],
+            "source" => $quelle,
+            "target" => $ziel,
             "lqi" => isset($link["lqi"]) ? (int) $link["lqi"] : (isset($link["linkquality"]) ? (int) $link["linkquality"] : 0),
             "relationship" => isset($link["relationship"]) ? (int) $link["relationship"] : -1
         );
@@ -444,6 +531,22 @@ function restoreSettings()
         return json_encode(array("result" => false, "errors" => $texte));
     }
     LOGSTART("Restore settings");
+    // 4.2.5 (Gruppe 38, V8, T2-5): an unreadable file is set aside as .kaputt
+    // before the backup is written - as setFormData() does; until 4.2.4 it was
+    // overwritten without a trace
+    $beiseite = array();
+    foreach (array("mqtt.json" => MqttConfig::lage(), "service.json" => ServiceConfig::lage(),
+                   "meldungen.json" => zng_meldungen_lage()) as $name => $lage) {
+        if ($lage !== "kaputt") {
+            continue;
+        }
+        $datei = LBPCONFIGDIR . "/" . $name;
+        $raw = @file_get_contents($datei);
+        if (is_string($raw) && zng_schreiben_atomar($datei . ".kaputt", $raw, ZNG_MODUS_GEHEIM)) {
+            $beiseite[] = $name;
+            LOGWARN("Restore: $name was unreadable - kept as $datei.kaputt, then written from the backup");
+        }
+    }
     if (!Sicherung::schreiben($neu)) {
         LOGERR("Restore: the settings could not be written - nothing was changed");
         LOGEND("Restore failed");
@@ -451,8 +554,10 @@ function restoreSettings()
     }
     LOGOK("Restore: " . implode(", ", $info["teile"]) . " written, " . $info["fehlend"] . " key(s) not in the file kept their value");
     $dienst = zng_aenderungen_anwenden();
+    $dienst["haus"] = zng_haus_aufraeumen_melden();
     LOGEND("Restore finished");
-    return json_encode(array_merge(array("result" => true, "teile" => $info["teile"], "fehlend" => $info["fehlend"]), $dienst));
+    return json_encode(array_merge(array("result" => true, "teile" => $info["teile"], "fehlend" => $info["fehlend"],
+        "kaputt_beiseite" => $beiseite), $dienst));
 }
 
 /**

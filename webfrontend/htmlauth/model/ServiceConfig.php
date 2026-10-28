@@ -190,6 +190,12 @@ class ServiceConfig {
      */
     public function keepFrom(ServiceConfig $saved) {
         $this->frontendToken = $saved->frontendToken;
+        // 4.2.5 (Gruppe 38, E2): notifyOffline, notifyBattery and
+        // batteryThreshold are legacy - read (transition to meldungen.json,
+        // older backups), no longer on the form. Kept as they are.
+        $this->notifyOffline = $saved->notifyOffline;
+        $this->notifyBattery = $saved->notifyBattery;
+        $this->batteryThreshold = $saved->batteryThreshold;
     }
 
     /**

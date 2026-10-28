@@ -37,6 +37,22 @@ PTEMPPATH=$6  # Sixth argument is full temp path during install (see also $1)
 
 # Base folder of LoxBerry
 
+# 4.2.5 (Gruppe 38, V6): the LoxBerry home comes from /etc/environment; the
+# installer passes it as fifth argument too (plugininstall.pl). Without both,
+# and with a folder that is not the own one, nothing is done - a path built
+# from an empty variable would be "/zigbee2mqttng" (chown -R as root).
+LBHOMEDIR="${LBHOMEDIR:-$5}"
+case "$PDIR" in zigbee2mqttng) ;; *) echo "<FAIL> unexpected plugin folder '$PDIR'"; exit 2;; esac
+case "$LBHOMEDIR" in /?*) ;; *) echo "<FAIL> LoxBerry home folder unknown"; exit 2;; esac
+LBPCGI="${LBPCGI:-$LBHOMEDIR/webfrontend/htmlauth/plugins}"
+LBPHTML="${LBPHTML:-$LBHOMEDIR/webfrontend/html/plugins}"
+LBPTEMPL="${LBPTEMPL:-$LBHOMEDIR/templates/plugins}"
+LBPDATA="${LBPDATA:-$LBHOMEDIR/data/plugins}"
+LBPLOG="${LBPLOG:-$LBHOMEDIR/log/plugins}"
+LBPCONFIG="${LBPCONFIG:-$LBHOMEDIR/config/plugins}"
+LBPSBIN="${LBPSBIN:-$LBHOMEDIR/sbin/plugins}"
+LBPBIN="${LBPBIN:-$LBHOMEDIR/bin/plugins}"
+
 # Combine them with /etc/environment
 PCGI=$LBPCGI/$PDIR
 PHTML=$LBPHTML/$PDIR
@@ -65,17 +81,32 @@ fi
 # files do not change while they are copied (preroot.sh would stop it a
 # moment later anyway); on a cancelled update it is started again.
 SICHERUNG=/tmp/${PTEMPDIR}_upgrade
+# 4.2.5 (Gruppe 38, V5, Regeln/06): marker "was running before". It lies NEXT
+# TO the config folder, so it survives purge_installation; postroot.sh starts
+# zigbee2mqtt after the update only with it (or on a fresh installation) and
+# removes it. A service stopped on purpose stays stopped. preroot.sh runs
+# BEFORE this script and stops the service - it writes the marker; here it is
+# only written if the service still runs (preroot could not stop it).
+LIEF_VORHER="$LBPCONFIG/$PDIR.lief_vorher"
 abbrechen() {
     echo "<FAIL> $1"
     echo "<FAIL> The update is cancelled, nothing was changed. The Zigbee network stays as it is."
-    if [ "$GESTOPPT" = "1" ]; then
+    # started again right here when it ran before (stopped by preroot.sh or
+    # below) - the marker is not needed any more
+    if [ "$GESTOPPT" = "1" ] || [ -f "$LIEF_VORHER" ]; then
         sudo -n systemctl start zigbee2mqttng >/dev/null 2>&1 && echo "<INFO> zigbee2mqtt started again"
     fi
+    rm -f "$LIEF_VORHER"
     exit 2
 }
 
 GESTOPPT=0
 if systemctl is-active --quiet zigbee2mqttng; then
+    if (umask 077; date +%s > "$LIEF_VORHER"); then
+        echo "<INFO> zigbee2mqtt runs - it is started again after the update"
+    else
+        echo "<WARNING> The marker $LIEF_VORHER could not be written - zigbee2mqtt stays stopped after the update, start it on the Settings tab"
+    fi
     echo "<INFO> Stopping zigbee2mqtt for the backup"
     if timeout 60 sudo -n systemctl stop zigbee2mqttng >/dev/null 2>&1; then
         GESTOPPT=1

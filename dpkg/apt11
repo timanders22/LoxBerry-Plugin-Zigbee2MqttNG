@@ -1,2 +1,5 @@
 php-yaml
 g++
+# make: only needed when zigbee2mqtt has to compile a native binding (e.g.
+# @serialport/bindings-cpp) without a prebuilt one for this architecture (4.2.5, T6-4)
+make

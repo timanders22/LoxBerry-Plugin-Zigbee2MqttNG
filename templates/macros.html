@@ -47,6 +47,12 @@
     data-nichtangehalten="{{ 'Dienst.NichtAngehalten' | trans }}"
     data-gespeichert="{{ 'Dienst.Gespeichert' | trans }}"
     data-unbekannt="{{ 'Dienst.Unbekannt' | trans }}"></span>
+{# 4.2.5 (Gruppe 38, V10/E1): texts for clearing the house topics after saving, read by common.js #}
+<span id="haustexte" style="display:none"
+    data-geleert="{{ 'Mqtt.HausGeleert' | trans }}"
+    data-nichts="{{ 'Mqtt.HausNichts' | trans }}"
+    data-rest="{{ 'Mqtt.HausRest' | trans }}"
+    data-keinbroker="{{ 'Mqtt.HausKeinBroker' | trans }}"></span>
 {% endmacro %}
 
 {# Save button with the messages above it #}
@@ -99,7 +105,12 @@
 {% endif %}
 {% endfor %}
 {% if k.sperre %}
-<div class="sm-fehler"><b>{{ 'Konfig.SperreTitel' | trans }}</b><br>{{ 'Konfig.SperreText' | trans | replace({'%s': k.sperre}) }}</div>
+<div class="sm-fehler"><b>{{ 'Konfig.SperreTitel' | trans }}</b><br>
+{% if k.generate %}{# 4.2.5 (V1): the second copy carries GENERATE, the network exists #}
+{{ 'Konfig.SperreGenerate' | trans }}<br>{{ 'Konfig.SperreGenerateRueckweg' | trans }}
+{% elseif k.rueckkopie %}{# 4.2.5 (V3): the copy back of an update failed #}
+{{ 'Konfig.SperreRueckkopie' | trans }}
+{% else %}{{ 'Konfig.SperreText' | trans | replace({'%s': k.sperre}) }}{% endif %}</div>
 {% endif %}
 {% endmacro %}
 

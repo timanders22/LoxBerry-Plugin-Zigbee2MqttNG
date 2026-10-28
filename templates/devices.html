@@ -57,18 +57,20 @@
 <!-- ============ Device list (read only) ============ -->
 <h3>{{ 'Devices.ListTitle' | trans }}</h3>
 <p class="hint">{{ 'Devices.ListDesc' | trans }}</p>
+<p class="hint">{{ 'Devices.FirmwareSatz' | trans }}</p>
 {% if not hasList %}
 <div class="sm-warnung">{{ 'Devices.NoList' | trans }}</div>
 {% elseif deviceList is empty %}
 <p>{{ 'Devices.Empty' | trans }}</p>
 {% else %}
-<div style="overflow-x:auto">
+<div class="sm-breit">
     <table class="sm-tbl">
         <tr>
             <th>{{ 'Devices.Name' | trans }}</th>
             <th>{{ 'Devices.Model' | trans }}</th>
             <th>{{ 'Devices.Type' | trans }}</th>
             <th>{{ 'Devices.Values' | trans }}</th>
+            <th>{{ 'Devices.Firmware' | trans }}</th>
             {% if showLastSeen %}<th>{{ 'Devices.LastSeen' | trans }}</th>{% endif %}
         </tr>
         {% for device in deviceList %}
@@ -84,6 +86,7 @@
                 {% if device.disabled %}<br><span class="sm-klein">{{ 'Devices.Disabled' | trans }}</span>{% endif %}
             </td>
             <td>{{ device.values }}</td>
+            <td class="{{ device.firmwareKlasse }}">{{ device.firmware }}</td>
             {% if showLastSeen %}<td>{{ device.lastSeen }}</td>{% endif %}
         </tr>
         {% endfor %}
@@ -113,6 +116,8 @@
     <span>{{ 'Map.LqiLegend' | trans }}</span>
 </p>
 <div id="devicemap"></div>
+<!-- 4.2.5 (V9, T5-2): the link list scrolls inside its box instead of making the page long -->
+<div class="sm-scroll" style="max-height:320px;overflow:auto">
 <table class="sm-tbl" id="maplinks" style="display:none">
     <thead>
         <tr>
@@ -123,6 +128,7 @@
     </thead>
     <tbody></tbody>
 </table>
+</div>
 
 <!-- ============ devices.yaml ============ -->
 <div data-role="collapsible" data-collapsed="true" data-mini="true">

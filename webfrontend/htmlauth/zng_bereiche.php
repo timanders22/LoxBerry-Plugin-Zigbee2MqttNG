@@ -196,6 +196,11 @@ function zng_bereich_settings($twig)
         "predecessors" => zng_predecessor_plugins(),
         "adapters" => ServiceConfig::ADAPTERS,
         "service" => ServiceConfig::load(),
+        // 4.2.5 (Gruppe 38): one-time message of a server form, the section
+        // "Notifications" (E2) and the form to lift the start block (V3)
+        "einmal" => zng_einmal_html("settings"),
+        "meldungen_html" => zng_meldungen_html(),
+        "sperre_html" => zng_sperre_html(),
     ));
 }
 
@@ -221,7 +226,13 @@ function zng_bereich_ui($twig)
 {
     $serviceCfg = ServiceConfig::load();
     $port = (int) $serviceCfg->frontendPort > 0 ? (int) $serviceCfg->frontendPort : 8881;
-    echo $twig->render('ui.html', array("port" => $port, "service" => $serviceCfg));
+    // 4.2.5 (Gruppe 38, V9, T4-3): the zigbee2mqtt UI speaks only http. Called
+    // through https, the browser blocks the http frame - then a sentence and a
+    // direct link (new window) stand above it.
+    $https = isset($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "" && strtolower((string) $_SERVER["HTTPS"]) !== "off";
+    $host = isset($_SERVER["SERVER_NAME"]) && preg_match('/^[A-Za-z0-9.\-]{1,253}\z/', (string) $_SERVER["SERVER_NAME"])
+        ? (string) $_SERVER["SERVER_NAME"] : "";
+    echo $twig->render('ui.html', array("port" => $port, "service" => $serviceCfg, "https" => $https, "host" => $host));
 }
 
 /** Reiter MQTT (bis 4.1.1 mqtt.php) */
@@ -234,7 +245,61 @@ function zng_bereich_mqtt($twig)
         "konfig" => zng_konfig_anzeige(),
         "mqtt_installed" => $mqtt_installed,
         "gateway" => zng_gateway_info(),
+        // 4.2.5 (Gruppe 38, E1): the devices for the house topics
+        "hausGeraete" => zng_haus_geraete_tabelle(),
+        "hausFelder" => zng_haus_felder(),
     ));
+}
+
+/**
+ * 4.2.5 (E1): rows of the table "Devices for the house topics": every device
+ * with a klima/wetter or alarm field. The IEEE is not shown - it travels as a
+ * hidden field with the row index and is checked on saving.
+ */
+function zng_haus_geraete_tabelle()
+{
+    global $bridgeDevicesFile, $serviceConfigFile;
+    $mqtt = MqttConfig::load();
+    $bereiche = is_array($mqtt->hausBereiche) ? $mqtt->hausBereiche : array();
+    $alarmAus = is_array($mqtt->hausAlarmAus) ? $mqtt->hausAlarmAus : array();
+    // the last values zigbee2mqtt keeps (state.json) - shown as they would go out (zng_haus_wert)
+    $cache = zng_read_json(dirname($serviceConfigFile) . "/state.json", array());
+    $cache = is_array($cache) ? $cache : array();
+    $zeilen = array();
+    foreach (zng_state_devices(zng_read_json($bridgeDevicesFile, array())) as $d) {
+        if (!isset($d["ieee_address"]) || !zng_ieee_ok($d["ieee_address"])) {
+            continue;
+        }
+        $felder = zng_haus_geraet_felder($d);
+        if (!$felder) {
+            continue;
+        }
+        $kw = array();
+        $alarm = array();
+        $st = isset($cache[$d["ieee_address"]]) && is_array($cache[$d["ieee_address"]]) ? $cache[$d["ieee_address"]] : array();
+        foreach ($felder as $r) {
+            $text = $r[1] . (array_key_exists($r[2], $st) ? " " . zng_haus_wert($r, $st[$r[2]]) : "");
+            if ($r[0] === "a") {
+                $alarm[] = $text;
+            } else {
+                $kw[] = $text;
+            }
+        }
+        $zeilen[] = array(
+            "ieee" => $d["ieee_address"],
+            "name" => $d["friendly_name"],
+            "modell" => isset($d["definition"]["model"]) ? (string) $d["definition"]["model"] : "",
+            "felder" => implode(", ", array_merge($kw, $alarm)),
+            "bereich" => $kw ? zng_haus_bereich($d["ieee_address"], $felder, $bereiche) : "",
+            "klima" => (bool) $kw,
+            "alarm" => (bool) $alarm,
+            "alarmAn" => $alarm && !in_array($d["ieee_address"], $alarmAus, true),
+        );
+    }
+    usort($zeilen, function ($a, $b) {
+        return strcasecmp($a["name"], $b["name"]);
+    });
+    return $zeilen;
 }
 
 /** Reiter Einbindung in Loxone (bis 4.1.1 loxone.php) */
@@ -317,7 +382,9 @@ function zng_bereich_loxone($twig)
 function zng_bereich_test($twig)
 {
     require_once __DIR__ . '/include/Z2mBridge.php';
-    echo $twig->render('test.html', array("rows" => statusRows(), "time" => date("H:i:s")));
+    echo $twig->render('test.html', array("rows" => statusRows(), "time" => date("H:i:s"),
+        // 4.2.5 (Gruppe 38, E2): one-time message and the buttons under "Schalten"
+        "einmal" => zng_einmal_html("test"), "schalten_html" => zng_schalten_html()));
 }
 
 /** Reiter Logdateien (bis 4.1.1 log.php) */
@@ -339,8 +406,11 @@ function zng_bereich_log($twig)
  */
 function deviceList($stateFile)
 {
-    global $bridgeDevicesFile, $availabilityFile;
+    global $bridgeDevicesFile, $availabilityFile, $otaFile;
     $result = array("devices" => array(), "stateTime" => "", "showLastSeen" => false);
+    // 4.2.5 (Gruppe 38, E4): firmware state per device (written by the extension)
+    $ota = zng_read_json($otaFile, array());
+    $ota = is_array($ota) ? $ota : array();
 
     $cache = array();
     if (is_readable($stateFile)) {
@@ -374,7 +444,10 @@ function deviceList($stateFile)
             $result["showLastSeen"] = true;
         }
         $name = isset($device["friendly_name"]) ? $device["friendly_name"] : $device["ieee_address"];
+        list($firmware, $firmwareKlasse) = zng_firmware_text($device, isset($ota[$name]) ? $ota[$name] : null);
         $result["devices"][] = array(
+            "firmware" => $firmware,
+            "firmwareKlasse" => $firmwareKlasse,
             "name" => $name,
             "ieee" => $device["ieee_address"],
             "model" => trim((isset($definition["vendor"]) ? $definition["vendor"] . " " : "") . (isset($definition["model"]) ? $definition["model"] : (isset($device["model_id"]) ? $device["model_id"] : ""))),
@@ -393,6 +466,34 @@ function deviceList($stateFile)
         return strcasecmp($a["name"], $b["name"]);
     });
     return $result;
+}
+
+/**
+ * 4.2.5 (Gruppe 38, E4): the column "Firmware" - "aktuell (<installed>)",
+ * "Update verfuegbar: <installed> -> <latest>", "wird eingespielt: n %",
+ * "kein OTA", "noch keine Aussage". Returns array(text, class).
+ */
+function zng_firmware_text($device, $o)
+{
+    if (!zng_supports_ota($device)) {
+        return array(zng_t("Devices.FwKeinOta"), "sm-info");
+    }
+    if (!is_array($o) || !isset($o["state"])) {
+        return array(zng_t("Devices.FwKeineAussage"), "sm-info");
+    }
+    $v = function ($x) {
+        return is_scalar($x) && (string) $x !== "" ? (string) $x : "?";
+    };
+    if ($o["state"] === "available" || $o["state"] === "scheduled") {
+        return array(sprintf(zng_t("Devices.FwVerfuegbar"), $v(isset($o["installed"]) ? $o["installed"] : null), $v(isset($o["latest"]) ? $o["latest"] : null)), "sm-hint");
+    }
+    if ($o["state"] === "updating") {
+        return array(sprintf(zng_t("Devices.FwLaeuft"), isset($o["progress"]) && is_numeric($o["progress"]) ? (int) $o["progress"] : 0), "sm-hint");
+    }
+    if ($o["state"] === "idle") {
+        return array(sprintf(zng_t("Devices.FwAktuell"), $v(isset($o["installed"]) ? $o["installed"] : null)), "sm-ok");
+    }
+    return array(zng_t("Devices.FwKeineAussage"), "sm-info");
 }
 
 /* ------------------------------------------------------------------
@@ -426,6 +527,8 @@ function statusRows()
     } else {
         $rows[] = statusRow("Test.Service", "fail", $L["Test.ServiceStopped"]);
     }
+    // 4.2.5 (V9, T4-6): the version of this plugin, next to the one of zigbee2mqtt (line Version below)
+    $rows[] = fassungRow();
     foreach (zng_predecessor_plugins() as $p) {
         $rows[] = statusRow(sprintf($L["Test.Predecessor"], $p["title"]), $p["active"] ? "fail" : "hint",
             $p["active"] ? $L["Test.PredecessorActive"] : $L["Test.PredecessorInstalled"]);
@@ -480,16 +583,28 @@ function statusRows()
     $rows[] = radioRow();
 
     $devices = zng_read_json($bridgeDevicesFile, null);
+    list($meldungen) = zng_meldungen_laden();
     if (is_array($devices)) {
-        $rows = array_merge($rows, deviceRows($devices, dirname($serviceConfigFile) . "/state.json", (int) $serviceCfg->batteryThreshold));
+        $rows = array_merge($rows, deviceRows($devices, dirname($serviceConfigFile) . "/state.json", (int) $meldungen["batterieSchwelle"]));
         $rows[] = actionsRow($mqttcfg->topic, $devices);
+        // 4.2.5 (Gruppe 38, E4)
+        $rows[] = firmwareRow($devices);
     }
     $rows = array_merge($rows, gatewayRows($mqttcfg));
-    $rows[] = hausRow($mqttcfg);
+    // 4.2.5 (V10, E1): one line per house family, the heartbeat of the families, mjs = PHP
+    $rows = array_merge($rows, hausRows($mqttcfg, $status));
+    $rows[] = hausFelderRow();
     // 4.1.1
     $rows[] = heartbeatRow($status, $service["pid"]);
     $rows = array_merge($rows, konfigRows());
+    // 4.2.5 (V1): network protection - only yes/no, never a value
+    $rows[] = netzschutzRow();
     $rows[] = vorlagenRow();
+    // 4.2.5 (E4): all three templates CRLF and well-formed
+    $rows[] = vorlagenCrlfRow();
+    // 4.2.5 (E2): ways of the notifications
+    $rows[] = signalRow($meldungen);
+    $rows = array_merge($rows, spracheRows($meldungen));
     // 4.2.4 (Gruppe 5, Entwurf zb E5/E6): Namen der Hakenliste, Deinstallationsskript (Praefixfall)
     $rows[] = namenRow($mqttcfg, $serviceCfg);
     $rows[] = uninstallRow();
@@ -970,30 +1085,232 @@ function gatewayRows($mqttcfg)
 }
 
 /**
- * House topics: fixed names, topics another provider owns, names that
- * Matter2Lox gives as well
+ * 4.2.5 (Gruppe 38, V10/E1): one line per house family (tuer, klima, wetter,
+ * alarm): off; or on, n names, heartbeat last s ago (status file of the
+ * extension), conflicts; the last clearing (state and time). For tuer as
+ * up to 4.2.4 also the names Matter2Lox gives as well.
  */
-function hausRow($mqttcfg)
+function hausRows($mqttcfg, $status)
 {
-    global $L, $hausNamesFile, $bridgeStatusFile, $matter2loxHausNamesFile;
-    if (!is_enabled($mqttcfg->hausTopics)) {
-        return statusRow("Test.Haus", "info", $L["Test.HausOff"]);
-    }
-    $names = array_values(zng_read_json($hausNamesFile, array()));
-    $status = zng_read_json($bridgeStatusFile, array());
+    global $L, $hausNamesFile, $hausTopicsFile, $hausLeerenFile, $matter2loxHausNamesFile;
+    $an = array("tuer" => is_enabled($mqttcfg->hausTopics), "klima" => is_enabled($mqttcfg->hausKlima),
+        "wetter" => is_enabled($mqttcfg->hausWetter), "alarm" => is_enabled($mqttcfg->hausAlarm));
+    $merk = zng_read_json($hausTopicsFile, array());
+    $merk = is_array($merk) ? $merk : array();
+    $leeren = zng_read_json($hausLeerenFile, array());
+    $leeren = is_array($leeren) ? $leeren : array();
     $conflicts = isset($status["conflicts"]) ? (array) $status["conflicts"] : array();
-    $matter = zng_read_json($matter2loxHausNamesFile, array());
-    $matterNames = isset($matter["namen"]) && is_array($matter["namen"]) ? array_values($matter["namen"]) : array();
-    $both = array_values(array_intersect($names, $matterNames));
-    $parts = array(sprintf($L["Test.HausNames"], count($names), implode(", ", $names)));
-    $state = "ok";
-    if ($conflicts) {
-        $state = "hint";
-        $parts[] = sprintf($L["Test.HausConflict"], implode(", ", $conflicts));
+    $familienLaufen = isset($status["familien"]) ? (array) $status["familien"] : array();
+    $hb = isset($status["heartbeat"]["ts"]) && is_numeric($status["heartbeat"]["ts"]) ? (int) $status["heartbeat"]["ts"] : 0;
+    $rows = array();
+    foreach ($an as $familie => $ein) {
+        $label = sprintf(zng_t("Test.HausFamilie"), $familie);
+        $teile = array();
+        if (isset($leeren[$familie]["lage"], $leeren[$familie]["zeit"])) {
+            $letzt = sprintf(zng_t("Test.HausLeeren"), (string) $leeren[$familie]["lage"], date("d.m.Y H:i:s", (int) $leeren[$familie]["zeit"]));
+        } else {
+            $letzt = "";
+        }
+        if (!$ein) {
+            $offen = 0;
+            foreach (array_keys($merk) as $t) {
+                $offen += strpos((string) $t, "haus/" . $familie . "/") === 0 ? 1 : 0;
+            }
+            $text = zng_t("Test.HausAus") . ($offen ? " – " . sprintf(zng_t("Test.HausNochGemerkt"), $offen) : "") . ($letzt !== "" ? " – " . $letzt : "");
+            $rows[] = statusRow($label, $offen ? "hint" : "info", $text);
+            continue;
+        }
+        $namen = array();
+        foreach (array_keys($merk) as $t) {
+            $x = explode("/", (string) $t);
+            if (count($x) === 4 && $x[1] === $familie && strpos((string) $merk[$t], "-") !== 0) {
+                $namen[$x[2]] = true;
+            }
+        }
+        $state = "ok";
+        $teile[] = sprintf(zng_t("Test.HausAn"), count($namen), implode(", ", array_slice(array_keys($namen), 0, 8)));
+        if (!in_array($familie, $familienLaufen, true) || $hb === 0) {
+            $state = "hint";
+            $teile[] = zng_t("Test.HausNochNichtGeladen");
+        } else {
+            $alter = time() - $hb;
+            $teile[] = sprintf(zng_t("Test.HausLebenszeichen"), $alter);
+            if ($alter > 150) {
+                $state = "fail";
+            }
+        }
+        $eigene = array_values(array_filter($conflicts, function ($c) use ($familie) {
+            return strpos((string) $c, "haus/" . $familie . "/") === 0;
+        }));
+        if ($eigene) {
+            $state = $state === "fail" ? "fail" : "hint";
+            $teile[] = sprintf($L["Test.HausConflict"], implode(", ", $eigene));
+        }
+        if ($familie === "tuer") {
+            $names = array_values(zng_read_json($hausNamesFile, array()));
+            $matter = zng_read_json($matter2loxHausNamesFile, array());
+            $matterNames = isset($matter["namen"]) && is_array($matter["namen"]) ? array_values($matter["namen"]) : array();
+            $both = array_values(array_intersect(array_keys($namen), $matterNames));
+            if ($both) {
+                $state = $state === "fail" ? "fail" : "hint";
+                $teile[] = sprintf($L["Test.HausMatter"], implode(", ", $both));
+            }
+        }
+        if ($letzt !== "") {
+            $teile[] = $letzt;
+        }
+        $rows[] = statusRow($label, $state, implode(" – ", $teile));
     }
-    if ($both) {
-        $state = "hint";
-        $parts[] = sprintf($L["Test.HausMatter"], implode(", ", $both));
+    return $rows;
+}
+
+/**
+ * 4.2.5 (E1, P-E1-5): the field table of the extension (HAUS_FELDER) and of
+ * PHP (zng_haus_felder()) - two texts of two files, compared word for word.
+ */
+function hausFelderRow()
+{
+    list($gleich, $nPhp, $nMjs) = zng_haus_felder_gleich(LBPBINDIR . "/zigbee2mqttng.php", LBPBINDIR . "/zigbee2mqttng_extension.mjs");
+    return statusRow("Test.HausFelder", $gleich ? "ok" : "fail",
+        sprintf(zng_t($gleich ? "Test.HausFelderOk" : "Test.HausFelderFehl"), $nPhp, $nMjs));
+}
+
+/** 4.2.5 (E4): devices with OTA, with an update (names up to 5), age of the file */
+function firmwareRow($devices)
+{
+    global $otaFile;
+    $mitOta = 0;
+    foreach (zng_state_devices($devices) as $d) {
+        $mitOta += zng_supports_ota($d) ? 1 : 0;
     }
-    return statusRow("Test.Haus", $state, implode(" - ", $parts));
+    $ota = zng_read_json($otaFile, array());
+    $ota = is_array($ota) ? $ota : array();
+    $verfuegbar = array();
+    foreach ($ota as $name => $o) {
+        if (is_array($o) && isset($o["state"]) && in_array($o["state"], array("available", "scheduled"), true)) {
+            $verfuegbar[] = (string) $name;
+        }
+    }
+    $alter = is_file($otaFile) ? sprintf(zng_t("Test.FirmwareAlter"), date("d.m.Y H:i", (int) filemtime($otaFile))) : zng_t("Test.FirmwareKeineDatei");
+    $text = sprintf(zng_t("Test.FirmwareText"), $mitOta, count($verfuegbar))
+        . ($verfuegbar ? ": " . implode(", ", array_slice($verfuegbar, 0, 5)) . (count($verfuegbar) > 5 ? ", …" : "") : "") . " – " . $alter;
+    return statusRow("Test.Firmware", $verfuegbar ? "hint" : "info", $text);
+}
+
+/** 4.2.5 (V1): does the second copy carry GENERATE, is there coordinator_backup.json - yes/no only */
+function netzschutzRow()
+{
+    $n = zng_netzschutz_lage();
+    $z = $n["zweitschrift"] === null ? zng_t("Test.NetzschutzUnbekannt") : zng_t($n["zweitschrift"] ? "Test.Ja" : "Test.Nein");
+    $text = sprintf(zng_t("Test.NetzschutzText"), $z, zng_t($n["backup"] ? "Test.Ja" : "Test.Nein"));
+    $state = $n["zweitschrift"] === true && $n["backup"] ? "fail" : ($n["zweitschrift"] === true ? "hint" : "ok");
+    return statusRow("Test.Netzschutz", $state, $text);
+}
+
+/**
+ * 4.2.5 (E4): every kind of template (in, inhttp, out) for all devices,
+ * built here: well-formed (simplexml, without it the fallback below) and CRLF
+ * in every line. "in" without the UDP port of the gateway is built with port 1
+ * - the template is the same apart from the port.
+ */
+function vorlagenCrlfRow()
+{
+    global $bridgeDevicesFile;
+    $mqttcfg = MqttConfig::load();
+    $ios = zng_device_ios($mqttcfg->topic, zng_read_json($bridgeDevicesFile, array()), is_enabled(ServiceConfig::load()->availability));
+    $in = zng_lebenszeichen_ios($mqttcfg->topic);
+    $out = array();
+    foreach ($ios as $d) {
+        $in = array_merge($in, $d["inputs"]);
+        $out = array_merge($out, $d["outputs"]);
+    }
+    $gw = zng_gateway_info();
+    $xml = array(
+        "in" => zng_xml_virtual_in_udp("Zigbee2MqttNG", $gw["udpport"] > 0 ? $gw["udpport"] : 1, $in, ""),
+        "inhttp" => zng_xml_virtual_in_http("Zigbee2MqttNG", $in, ""),
+        "out" => zng_xml_virtual_out("Zigbee2MqttNG", "/dev/udp/127.0.0.1/" . (int) $gw["udpinport"], $out, ""),
+    );
+    $fehler = array();
+    foreach ($xml as $art => $x) {
+        if (!zng_xml_wohlgeformt($x)) {
+            $fehler[] = $art . ": XML";
+        }
+        $zeilen = substr_count($x, "\n");
+        if ($zeilen === 0 || substr_count($x, "\r\n") !== $zeilen) {
+            $fehler[] = $art . ": " . zng_t("Test.VorlageKeinCrlf");
+        }
+    }
+    return $fehler ? statusRow("Test.VorlageCrlf", "fail", implode("; ", $fehler))
+        : statusRow("Test.VorlageCrlf", "ok", zng_t("Test.VorlageCrlfOk"));
+}
+
+/** well-formed XML: simplexml where it is loaded, otherwise a plain check of the tags (fallback) */
+function zng_xml_wohlgeformt($x)
+{
+    if (function_exists("simplexml_load_string")) {
+        $alt = libxml_use_internal_errors(true);
+        $doc = simplexml_load_string($x);
+        libxml_clear_errors();
+        libxml_use_internal_errors($alt);
+        return $doc !== false;
+    }
+    $rumpf = preg_replace('/^<\?xml[^>]*\?>\s*/', '', $x);
+    $stapel = array();
+    if (!preg_match_all('#<(/?)([A-Za-z][A-Za-z0-9]*)((?:\s+[A-Za-z]+="[^"<]*")*)\s*(/?)>#', $rumpf, $m, PREG_SET_ORDER)) {
+        return false;
+    }
+    foreach ($m as $t) {
+        if ($t[1] === "/") {
+            if (array_pop($stapel) !== $t[2]) {
+                return false;
+            }
+        } elseif ($t[4] !== "/") {
+            $stapel[] = $t[2];
+        }
+    }
+    return $stapel === array() && strpos(preg_replace('#<[^>]*>#', '', $rumpf), '<') === false;
+}
+
+/** 4.2.5 (E2): the Signal way - off / on, SignalBot installed yes/no, last answer (time, result) */
+function signalRow($m)
+{
+    global $signalStatusFile;
+    if (empty($m["signalEin"])) {
+        return statusRow("Test.Signal", "info", zng_t("Test.SignalAus"));
+    }
+    $da = function_exists("zng_plugin_installiert") ? zng_plugin_installiert("signalbot") : null;
+    $teile = array(sprintf(zng_t("Test.SignalAn"), (string) $m["signalPraefix"]),
+        zng_t($da === true ? "Test.SignalBotDa" : ($da === false ? "Test.SignalBotFehlt" : "Test.SignalBotUnbekannt")));
+    $q = zng_read_json($signalStatusFile, null);
+    $state = $da === false ? "fail" : "info";
+    if (is_array($q) && isset($q["lage"], $q["zeit"])) {
+        $teile[] = sprintf(zng_t("Test.SignalLetzte"), date("d.m.Y H:i:s", (int) $q["zeit"]), (string) $q["lage"]
+            . (isset($q["grund"]) && $q["grund"] !== "" ? ": " . (string) $q["grund"] : ""));
+        $state = $q["lage"] === "angenommen" ? "ok" : ($state === "fail" ? "fail" : "hint");
+    } else {
+        $teile[] = zng_t("Test.SignalNie");
+    }
+    return statusRow("Test.Signal", $state, implode(" – ", $teile));
+}
+
+/** 4.2.5 (E2): the line of the speech module (per target with 1.2.0) */
+function spracheRows($m)
+{
+    if (empty($m["spracheEin"])) {
+        return array(statusRow("Test.Sprache", "info", zng_t("Test.SpracheAus")));
+    }
+    if (!function_exists("ansage_pruefzeile")) {
+        require_once __DIR__ . "/sprachausgabe.php";
+    }
+    list($stand, $text) = ansage_pruefzeile(is_array($m["tts"]) ? $m["tts"] : array(), true, zng_ansage_k());
+    $state = $stand === 1 ? "ok" : ($stand === 0 ? "fail" : "info");
+    // the module masks its text itself; the table masks again - so it is unmasked here once
+    return array(statusRow("Test.Sprache", $state, html_entity_decode(strip_tags((string) $text), ENT_QUOTES, "UTF-8")));
+}
+
+/** 4.2.5 (V9, T4-6): "Fassung dieses Plugins" - from the plugin database, asked by the folder name */
+function fassungRow()
+{
+    $v = class_exists("LBSystem") ? LBSystem::pluginversion(basename(__DIR__)) : null;
+    return statusRow("Test.Fassung", is_string($v) && $v !== "" ? "info" : "hint", is_string($v) && $v !== "" ? $v : zng_t("Test.FassungUnbekannt"));
 }

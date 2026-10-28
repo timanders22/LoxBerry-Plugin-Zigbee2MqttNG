@@ -41,7 +41,69 @@
     {% set f %}<input value="" id="MqttConfig[password]" name="MqttConfig[password]" type="password" class="textfield" data-role="none" autocomplete="new-password" data-set="{{ 'Mqtt.PasswordSet' | trans }}">{% endset %}
     {{ m.row('MqttConfig[password]', 'Mqtt.LabelPassword' | trans, f, 'Mqtt.HintPassword' | trans, 'ownbroker') }}
 
+    <!-- ============ 4.2.5 (Gruppe 38, V10/E1): house topics for other plugins ============ -->
+    <h2>{{ 'Mqtt.HausTitel' | trans }}</h2>
+    <p class="sm-hilfe">{{ 'Mqtt.HausDesc' | trans }}</p>
         {{ m.haken('MqttConfig[hausTopics]', 'Mqtt.LabelHausTopics' | trans, 'Mqtt.HintHausTopics' | trans, '') }}
+        {{ m.haken('MqttConfig[hausKlima]', 'Mqtt.LabelHausKlima' | trans, 'Mqtt.HintHausKlima' | trans, '') }}
+        {{ m.haken('MqttConfig[hausWetter]', 'Mqtt.LabelHausWetter' | trans, 'Mqtt.HintHausWetter' | trans, '') }}
+        {{ m.haken('MqttConfig[hausAlarm]', 'Mqtt.LabelHausAlarm' | trans, 'Mqtt.HintHausAlarm' | trans, '') }}
+
+    <h3>{{ 'Mqtt.HausGeraeteTitel' | trans }}</h3>
+    {% if hausGeraete is empty %}
+    <p class="sm-hilfe">{{ 'Mqtt.HausKeineGeraete' | trans }}</p>
+    {% else %}
+    <p class="sm-hilfe">{{ 'Mqtt.HausGeraeteDesc' | trans }}</p>
+    <div class="sm-breit">
+    <table class="sm-tbl">
+        <tr><th>{{ 'Devices.Name' | trans }}</th><th>{{ 'Devices.Model' | trans }}</th><th>{{ 'Mqtt.HausFelder' | trans }}</th>
+            <th>{{ 'Mqtt.HausBereich' | trans }}</th><th>{{ 'Mqtt.HausAlarmMelden' | trans }}</th></tr>
+        {% for g in hausGeraete %}
+        <tr>
+            <td>{{ g.name }}<input type="hidden" name="hausGeraet[{{ loop.index0 }}]" value="{{ g.ieee }}"></td>
+            <td>{{ g.modell }}</td>
+            <td>{{ g.felder }}</td>
+            <td>{% if g.klima %}
+                <select data-role="none" name="hausBereich[{{ loop.index0 }}]">
+                    <option value="klima"{% if g.bereich == 'klima' %} selected{% endif %}>{{ 'Mqtt.HausBereichKlima' | trans }}</option>
+                    <option value="wetter"{% if g.bereich == 'wetter' %} selected{% endif %}>{{ 'Mqtt.HausBereichWetter' | trans }}</option>
+                    <option value="aus"{% if g.bereich == 'aus' %} selected{% endif %}>{{ 'Mqtt.HausBereichAus' | trans }}</option>
+                </select>{% else %}–{% endif %}</td>
+            <td>{% if g.alarm %}<label><input data-role="none" type="checkbox" name="hausAlarm[{{ loop.index0 }}]"{% if g.alarmAn %} checked{% endif %}> {{ 'Mqtt.HausAlarmJa' | trans }}</label>{% else %}–{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    </div>
+    <p class="sm-hilfe">{{ 'Mqtt.HausBereichHilfe' | trans }}</p>
+    {% endif %}
 </form>
+
+<h3>{{ 'Mqtt.HausThemenTitel' | trans }}</h3>
+<div class="sm-breit">
+<table class="sm-tbl">
+    <tr><th>{{ 'Mqtt.Thema' | trans }}</th><th>{{ 'Mqtt.Bedeutung' | trans }}</th><th>Retain</th></tr>
+    <tr><td><code>haus/tuer/&lt;name&gt;/offen</code>, <code>…/verriegelt</code></td><td>{{ 'Mqtt.HausTuerBedeutung' | trans }}</td><td>{{ 'Test.Ja' | trans }}</td></tr>
+    {% for f in hausFelder %}
+    <tr><td><code>haus/{{ f[0] == 'a' ? 'alarm' : (f[0] == 'k' ? 'klima' : 'klima|wetter') }}/&lt;name&gt;/{{ f[1] }}</code></td>
+        <td>{{ ('Mqtt.HausFeld_' ~ f[1]) | trans }}</td><td>{{ 'Test.Ja' | trans }}</td></tr>
+    {% endfor %}
+    <tr><td><code>haus/klima|wetter/&lt;name&gt;/zeit</code></td><td>{{ 'Mqtt.HausZeitBedeutung' | trans }}</td><td>{{ 'Test.Ja' | trans }}</td></tr>
+    <tr><td><code>haus/&lt;familie&gt;/&lt;name&gt;/anbieter</code></td><td>{{ 'Mqtt.HausAnbieterBedeutung' | trans }}</td><td>{{ 'Test.Ja' | trans }}</td></tr>
+    <tr><td><code>haus/&lt;familie&gt;/zaehler/zigbee2mqttng</code></td><td>{{ 'Mqtt.HausZaehlerBedeutung' | trans }}</td><td>{{ 'Test.Nein' | trans }}</td></tr>
+</table>
+</div>
+<p class="sm-hilfe">{{ 'Mqtt.HausWerLiest' | trans }}</p>
+
+<h3>{{ 'Mqtt.EigeneTitel' | trans }}</h3>
+<div class="sm-breit">
+<table class="sm-tbl">
+    <tr><th>{{ 'Mqtt.Thema' | trans }}</th><th>{{ 'Mqtt.Bedeutung' | trans }}</th><th>Retain</th></tr>
+    <tr><td><code>&lt;topic&gt;/zigbee2mqttng/ts</code>, <code>…/zaehler</code></td><td>{{ 'Mqtt.ThemaLebenszeichen' | trans }}</td><td>{{ 'Test.Nein' | trans }}</td></tr>
+    <tr><td><code>&lt;topic&gt;/zigbee2mqttng/updates</code></td><td>{{ 'Mqtt.ThemaUpdates' | trans }}</td><td>{{ 'Test.Nein' | trans }}</td></tr>
+    <tr><td><code>&lt;topic&gt;/&lt;gerät&gt;/erreichbar</code></td><td>{{ 'Mqtt.ThemaErreichbar' | trans }}</td><td>{{ 'Test.Nein' | trans }}</td></tr>
+    <tr><td><code>&lt;topic&gt;/&lt;gerät&gt;/aktion/&lt;wert&gt;</code></td><td>{{ 'Mqtt.ThemaAktion' | trans }}</td><td>{{ 'Test.Nein' | trans }}</td></tr>
+    <tr><td><code>&lt;topic&gt;/&lt;gerät&gt;/update_verfuegbar</code></td><td>{{ 'Mqtt.ThemaUpdateVerfuegbar' | trans }}</td><td>{{ 'Test.Nein' | trans }}</td></tr>
+</table>
+</div>
 
 {{ m.savebutton() }}

@@ -37,6 +37,22 @@ PTEMPPATH=$6  # Sixth argument is full temp path during install (see also $1)
 
 # Base folder of LoxBerry
 
+# 4.2.5 (Gruppe 38, V6): the LoxBerry home comes from /etc/environment; the
+# installer passes it as fifth argument too (plugininstall.pl). Without both,
+# and with a folder that is not the own one, nothing is done - a path built
+# from an empty variable would be "/zigbee2mqttng" (chown -R as root).
+LBHOMEDIR="${LBHOMEDIR:-$5}"
+case "$PDIR" in zigbee2mqttng) ;; *) echo "<FAIL> unexpected plugin folder '$PDIR'"; exit 2;; esac
+case "$LBHOMEDIR" in /?*) ;; *) echo "<FAIL> LoxBerry home folder unknown"; exit 2;; esac
+LBPCGI="${LBPCGI:-$LBHOMEDIR/webfrontend/htmlauth/plugins}"
+LBPHTML="${LBPHTML:-$LBHOMEDIR/webfrontend/html/plugins}"
+LBPTEMPL="${LBPTEMPL:-$LBHOMEDIR/templates/plugins}"
+LBPDATA="${LBPDATA:-$LBHOMEDIR/data/plugins}"
+LBPLOG="${LBPLOG:-$LBHOMEDIR/log/plugins}"
+LBPCONFIG="${LBPCONFIG:-$LBHOMEDIR/config/plugins}"
+LBPSBIN="${LBPSBIN:-$LBHOMEDIR/sbin/plugins}"
+LBPBIN="${LBPBIN:-$LBHOMEDIR/bin/plugins}"
+
 # Combine them with /etc/environment
 PCGI=$LBPCGI/$PDIR
 PHTML=$LBPHTML/$PDIR
@@ -70,24 +86,63 @@ PREDECESSORS="zigbee2lox zigbee2mqtt"
 BUILDDIR=$INSTALLDIR.new
 
 ISUPGRADE=0
-if [ -d "/tmp/${PTEMPDIR}_upgrade" ]; then
+# 4.2.5 (Gruppe 38, V3): the copy back is checked. Until 4.2.4 "cp -f -r .../*"
+# lost dot files and the modification times (state.json), and the backup in
+# /tmp was removed even when the copy failed - with it the network key.
+RUECKKOPIE_OK=1
+SICHERUNG="/tmp/${PTEMPDIR}_upgrade"
+startsperre_rueckkopie() {
+    # the start block of update-config.php with the reason "rueckkopie": a
+    # later "systemctl start" does not start either; only "Lift the start
+    # block" on the Settings tab removes it, update-config.php never does
+    SPERRE="$PCONFIG/startsperre"
+    ALT=""
+    [ -f "$SPERRE" ] && ALT=$(tr -d '\n' < "$SPERRE")
+    case ",$ALT," in *,rueckkopie,*) return 0;; esac
+    if [ -d "$PCONFIG" ] && (umask 077; printf '%s\n' "${ALT:+$ALT,}rueckkopie" > "$SPERRE"); then
+        chown loxberry:loxberry "$SPERRE" 2>/dev/null
+        chmod 600 "$SPERRE"
+        echo "<INFO> Start block written: $SPERRE"
+    else
+        echo "<ERROR> The start block $SPERRE could not be written"
+    fi
+}
+if [ -d "$SICHERUNG" ]; then
     echo "<INFO> Upgrade detected"
     ISUPGRADE=1
 
-    #Replace service config in backup because it is copied back in the next step
-    if [ -d "$LBHOMEDIR/config/plugins/$PDIR" ]; then
-        cp -f -r $LBHOMEDIR/config/plugins/$PDIR/*.service /tmp/${PTEMPDIR}_upgrade/config/$PDIR/
+    # The service file of the new archive wins: it replaces the one in the
+    # backup before the backup is copied back (only this one file)
+    if [ -f "$LBHOMEDIR/config/plugins/$PDIR/zigbee2mqttng.service" ] && [ -d "$SICHERUNG/config/$PDIR" ]; then
+        cp -f -- "$LBHOMEDIR/config/plugins/$PDIR/zigbee2mqttng.service" "$SICHERUNG/config/$PDIR/zigbee2mqttng.service" || RUECKKOPIE_OK=0
     fi
 
     echo "<INFO> Copy back existing config files"
-    if [ -d "/tmp/${PTEMPDIR}_upgrade/config/$PDIR" ]; then
-        cp -f -r /tmp/${PTEMPDIR}_upgrade/config/$PDIR/* $LBHOMEDIR/config/plugins/$PDIR/
+    # the content with dot files, times and modes ("/." instead of "/*")
+    if [ -d "$SICHERUNG/config/$PDIR" ]; then
+        cp -a "$SICHERUNG/config/$PDIR/." "$PCONFIG/" || RUECKKOPIE_OK=0
     fi
-    if [ -d "/tmp/${PTEMPDIR}_upgrade/data/$PDIR" ]; then
-        cp -f -r /tmp/${PTEMPDIR}_upgrade/data/$PDIR/* $LBHOMEDIR/data/plugins/$PDIR/
+    if [ -d "$SICHERUNG/data/$PDIR" ]; then
+        cp -a "$SICHERUNG/data/$PDIR/." "$PDATA/" || RUECKKOPIE_OK=0
+    fi
+    # the files that hold the network, byte for byte (as preupgrade.sh)
+    if [ "$RUECKKOPIE_OK" -eq 1 ]; then
+        for f in configuration.yaml coordinator_backup.json database.db devices.yaml groups.yaml; do
+            [ -f "$SICHERUNG/data/$PDIR/$f" ] || continue
+            if ! cmp -s "$SICHERUNG/data/$PDIR/$f" "$PDATA/$f"; then
+                echo "<ERROR> $f differs from its backup after copying back"
+                RUECKKOPIE_OK=0
+            fi
+        done
+    fi
+    if [ "$RUECKKOPIE_OK" -eq 1 ]; then
+        rm -f -r "$SICHERUNG"
+        echo "<OK> Config and data copied back and checked"
+    else
+        echo "<ERROR> Copying back failed – the backup stays in $SICHERUNG; zigbee2mqtt is not started"
+        startsperre_rueckkopie
     fi
 fi
-rm -f -r /tmp/${PTEMPDIR}_upgrade
 
 # ---------------------------------------------------------------------------
 # Build zigbee2mqtt in $BUILDDIR. The running installation in $INSTALLDIR is
@@ -127,10 +182,13 @@ build_zigbee2mqtt() {
     export PATH=$BUILDDIR/node/bin:$PATH
 
     echo "<INFO> Node.js $(node --version)"
-    npm install -g --silent "$(node -p "require('./package.json').packageManager")" \
+    # 4.2.5: no "Update available" box of npm/pnpm in the install log - both read
+    # update-notifier from npm_config_* (checked in pnpm 10.18.3: pnpm.cjs addEnv,
+    # parseField, "config.updateNotifier !== false" before install/add)
+    NPM_CONFIG_UPDATE_NOTIFIER=false npm install -g --silent "$(node -p "require('./package.json').packageManager")" \
         || { BUILD_ERROR="Could not install the package manager of zigbee2mqtt"; return 1; }
     echo "<INFO> Installing the dependencies of zigbee2mqtt (pnpm $(pnpm --version))"
-    pnpm i --frozen-lockfile || { BUILD_ERROR="pnpm install failed"; return 1; }
+    NPM_CONFIG_UPDATE_NOTIFIER=false pnpm i --frozen-lockfile || { BUILD_ERROR="pnpm install failed"; return 1; }
 
     echo "<INFO> Building zigbee2mqtt"
     pnpm run build || { BUILD_ERROR="Build of zigbee2mqtt failed"; return 1; }
@@ -251,8 +309,8 @@ elif [ "$RC_UPDATE" -ne "0" ]; then
     echo "<WARNING> update-config.php ended with code $RC_UPDATE - see the log Service of the plugin"
 fi
 
-chown loxberry:loxberry $PDATA/* -R
-chown loxberry:loxberry $PCONFIG/* -R
+# 4.2.5 (V6): quoted, the two folders themselves, no glob
+chown -R loxberry:loxberry "$PDATA" "$PCONFIG"
 
 # if we have a new installation we setup the encryption
 # https://github.com/romanlum/LoxBerry-Plugin-Zigbee2Mqtt/issues/13
@@ -265,7 +323,8 @@ fi
 # 4.1.1 (B4): the files with the broker password, the UI token and the
 # network key are for loxberry only - also when they came from the archive
 # (0644) or from a backup of 4.1.0
-for f in "$PCONFIG/mqtt.json" "$PCONFIG/service.json" "$PDATA/configuration.yaml" "$PDATA/coordinator_backup.json" \
+for f in "$PCONFIG/mqtt.json" "$PCONFIG/service.json" "$PCONFIG/meldungen.json" "$PCONFIG/aktionstoken" "$PCONFIG/startsperre" \
+         "$PDATA/configuration.yaml" "$PDATA/coordinator_backup.json" \
          "$PCONFIG"/*.kaputt "$PDATA"/*.kaputt "$LBHOMEDIR/config/plugins/$PDIR".backup.* "$LBHOMEDIR/config/plugins/$PDIR".alt.*; do
     if [ -f "$f" ]; then
         chown loxberry:loxberry "$f"
@@ -279,7 +338,70 @@ ln -f -s $PCONFIG/zigbee2mqttng.service /etc/systemd/system/$SERVICE.service
 # Enable auto-start of the service
 systemctl daemon-reload
 systemctl enable $SERVICE
-systemctl start $SERVICE
+
+# 4.2.5 (Gruppe 38, V5, Regeln/06): started only on a fresh installation (also
+# when a predecessor was taken over) or when it ran before the update - the
+# marker of preupgrade.sh, at most 6 hours old (building zigbee2mqtt takes long
+# on a Pi) - and only when the copy back succeeded. "enable" stays: a reboot of
+# the LoxBerry starts the service, as before ("Stop" on the Settings tab does
+# no "disable").
+LIEF_VORHER="$LBPCONFIG/$PDIR.lief_vorher"
+STARTEN=0
+if [ "$RUECKKOPIE_OK" -ne 1 ]; then
+    STARTEN=0
+elif [ "$ISUPGRADE" -eq 0 ]; then
+    STARTEN=1
+elif [ -f "$LIEF_VORHER" ]; then
+    T_MERKER=$(tr -cd '0-9' < "$LIEF_VORHER" 2>/dev/null)
+    T_JETZT=$(date +%s)
+    ALTER=$((T_JETZT - ${T_MERKER:-0}))
+    if [ -n "$T_MERKER" ] && [ "$ALTER" -ge 0 ] && [ "$ALTER" -le 21600 ]; then
+        STARTEN=1
+    else
+        echo "<INFO> The marker of the running service is older than 6 hours - it is not used"
+    fi
+fi
+rm -f "$LIEF_VORHER"
+if [ "$STARTEN" -eq 1 ]; then
+    if systemctl start $SERVICE; then
+        echo "<OK> zigbee2mqtt started"
+    else
+        echo "<WARNING> zigbee2mqtt did not start - see the Settings tab"
+    fi
+elif [ "$RUECKKOPIE_OK" -eq 1 ]; then
+    echo "<INFO> zigbee2mqtt was stopped before the update and stays stopped – start it on the Settings tab"
+fi
+
+# 4.2.5 (Gruppe 38, V7): instead of REBOOT=1 Apache is reloaded - only when the
+# php-yaml ini of Apache is younger than the start of the Apache main process,
+# i.e. php-yaml came after Apache started. The ini in conf.d is a link made by
+# phpenmod at install time; its own time is taken (stat without -L: dpkg keeps
+# the build time on the file it points to). "reload" is graceful: running
+# requests end normally.
+apache_php_yaml() {
+    INI=$(ls /etc/php/*/apache2/conf.d/*yaml*.ini 2>/dev/null | head -1)
+    START=$(systemctl show -p ExecMainStartTimestamp --value apache2 2>/dev/null)
+    T_INI=""
+    T_START=""
+    [ -n "$INI" ] && T_INI=$(stat -c %Y -- "$INI" 2>/dev/null)
+    [ -n "$START" ] && T_START=$(date -d "$START" +%s 2>/dev/null)
+    case "$T_INI" in ''|*[!0-9]*) T_INI="";; esac
+    case "$T_START" in ''|*[!0-9]*) T_START="";; esac
+    if [ -z "$T_INI" ] || [ -z "$T_START" ]; then
+        echo "<WARNING> Apache: php-yaml ini or start time of Apache not readable - if the web interface reports php-yaml missing, restart the LoxBerry once"
+        return 0
+    fi
+    if [ "$T_INI" -gt "$T_START" ]; then
+        if systemctl reload apache2; then
+            echo "<OK> Apache reloaded so the web interface knows php-yaml"
+        else
+            echo "<WARNING> Apache could not be reloaded - if the web interface reports php-yaml missing, restart the LoxBerry once"
+        fi
+    else
+        echo "<INFO> Apache: no reload needed"
+    fi
+}
+apache_php_yaml
 
 if [ "$BUILD_OK" -ne "1" ]; then
     exit 1

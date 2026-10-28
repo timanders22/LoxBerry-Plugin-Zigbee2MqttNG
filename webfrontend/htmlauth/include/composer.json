@@ -3,6 +3,7 @@
         "twig/twig": "3.11.3"
     },
     "config": {
+        "vendor-dir": "vendor_twig",
         "policy": {
             "advisories": {
                 "block": false

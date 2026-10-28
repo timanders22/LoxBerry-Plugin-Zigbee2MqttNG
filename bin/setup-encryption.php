@@ -33,5 +33,12 @@ if (!zng_schreiben_atomar($serviceConfigFile, yaml_emit($zigbee2mqttConfig), ZNG
     LOGEND("Update encryption failed");
     exit(5);
 }
+// 4.2.5 (Gruppe 38, V1): the second copy written a moment ago by
+// update-config.php has no network key yet - it must never heal the file
+// once zigbee2mqtt formed the network. Set aside; the next start of
+// zigbee2mqtt writes the second copy with the real values.
+if (zng_zweitschrift_yaml_beiseite(zng_konfig_ordner())) {
+    LOGINF("Second copy of configuration.yaml without network key set aside (" . zng_konfig_ordner() . ".alt.configuration.yaml)");
+}
 LOGOK("Update encryption successful");
 LOGEND("Update encryption finished");

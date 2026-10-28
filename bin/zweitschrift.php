@@ -32,6 +32,8 @@ if ($befehl === "ziehen") {
     foreach (array(
         "mqtt.json" => array($konfig . "/mqtt.json", "json"),
         "service.json" => array($konfig . "/service.json", "json"),
+        // 4.2.5 (E2): ways of the notifications
+        "meldungen.json" => array($konfig . "/meldungen.json", "json"),
         "configuration.yaml" => array($daten . "/configuration.yaml", "yaml"),
         "coordinator_backup.json" => array($daten . "/coordinator_backup.json", "json"),
     ) as $name => $d) {
@@ -44,6 +46,11 @@ if ($befehl === "ziehen") {
             echo "<OK> Second copy of $name written: $ziel\n";
         } elseif ($ergebnis === "gleich") {
             echo "<INFO> Second copy of $name is up to date\n";
+        } elseif ($ergebnis === "generate") {
+            // 4.2.5 (V1, T7-7): its own text - nothing is wrong, the network does not exist yet
+            echo "<INFO> configuration.yaml still carries GENERATE – zigbee2mqtt has not formed the network yet; the second copy stays unchanged" . (is_file($ziel) ? " ($ziel)" : "") . "\n";
+        } elseif ($ergebnis === "ohne_yaml") {
+            echo "<WARNING> php-yaml is not loaded – $name could not be checked; its second copy stays unchanged" . (is_file($ziel) ? " ($ziel)" : "") . "\n";
         } elseif ($ergebnis === "ohne_inhalt") {
             echo "<WARNING> $name is not readable or empty - its second copy was left unchanged" . (is_file($ziel) ? " ($ziel)" : "") . "\n";
         } else {

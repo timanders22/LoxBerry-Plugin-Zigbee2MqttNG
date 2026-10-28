@@ -58,6 +58,38 @@ class MqttConfig
     public $hausTopics = false;
 
     /**
+     * 4.2.5 (Gruppe 38, E1): indoor climate under haus/klima/<name>/..., off by default
+     * @var bool
+     */
+    public $hausKlima = false;
+
+    /**
+     * 4.2.5 (E1): outdoor sensors (marked "Wetter (außen)") under haus/wetter/<name>/..., off by default
+     * @var bool
+     */
+    public $hausWetter = false;
+
+    /**
+     * 4.2.5 (E1): smoke, water, gas and CO detectors under haus/alarm/<name>/..., off by default
+     * @var bool
+     */
+    public $hausAlarm = false;
+
+    /**
+     * 4.2.5 (E1): area per device: { "<ieee>": "klima" | "wetter" | "aus" }.
+     * A device that is missing gets the proposal: klima with a klima field,
+     * otherwise aus.
+     * @var array
+     */
+    public $hausBereiche = array();
+
+    /**
+     * 4.2.5 (E1): alarm devices whose alarm is NOT reported (list of IEEE)
+     * @var array
+     */
+    public $hausAlarmAus = array();
+
+    /**
      * Creats a new instance
      */
     public function __construct()
@@ -110,8 +142,32 @@ class MqttConfig
             case "usemqttgateway":
             case "registerMqttTopic":
             case "hausTopics":
+            case "hausKlima":
+            case "hausWetter":
+            case "hausAlarm":
                 $b = zng_haken($value);
                 return $b === null ? array(false, "Mqtt.ValSwitch") : array(true, $b);
+            case "hausBereiche":
+                // 4.2.5 (E1): an object IEEE => klima|wetter|aus - one area per device
+                if (!is_array($value)) {
+                    return array(false, "Mqtt.ValHausBereich");
+                }
+                foreach ($value as $ieee => $b) {
+                    if (!zng_ieee_ok((string) $ieee) || !in_array($b, array("klima", "wetter", "aus"), true)) {
+                        return array(false, "Mqtt.ValHausBereich");
+                    }
+                }
+                return array(true, $value);
+            case "hausAlarmAus":
+                if (!is_array($value) || ($value && array_keys($value) !== range(0, count($value) - 1))) {
+                    return array(false, "Mqtt.ValHausGeraet");
+                }
+                foreach ($value as $ieee) {
+                    if (!zng_ieee_ok($ieee)) {
+                        return array(false, "Mqtt.ValHausGeraet");
+                    }
+                }
+                return array(true, array_values(array_unique($value)));
             case "topic":
                 $ok = is_string($value) && $value !== "" && strlen($value) <= 200
                     && strpbrk($value, "+#") === false && strpos($value, "//") === false
@@ -160,6 +216,20 @@ class MqttConfig
         if ((string) $this->password === "" && (string) $this->username !== "") {
             $this->password = $saved->password;
         }
+        // 4.2.5 (E1): hausBereiche/hausAlarmAus come from the device table,
+        // see ajax.php setFormData() and zng_haus_bereiche_lesen()
+    }
+
+    /**
+     * Saves the instance to the configuration file (JSON object for the
+     * areas also when it is empty).
+     */
+    public function toJsonDaten()
+    {
+        $d = get_object_vars($this);
+        $d["hausBereiche"] = (object) (is_array($this->hausBereiche) ? $this->hausBereiche : array());
+        $d["hausAlarmAus"] = array_values(is_array($this->hausAlarmAus) ? $this->hausAlarmAus : array());
+        return $d;
     }
 
     /**
@@ -194,6 +264,6 @@ class MqttConfig
      */
     public function toJson()
     {
-        return json_encode($this, JSON_PRETTY_PRINT);
+        return json_encode($this->toJsonDaten(), JSON_PRETTY_PRINT);
     }
 }

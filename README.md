@@ -8,6 +8,31 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.5
+
+Netzschutz, sichereres Update und neue Auskünfte für andere Plugins (Gruppe 38).
+
+* **Neuer Bezugsweg:** Das Update kommt jetzt als Tag-Archiv der Release-Seite – es gibt kein `plugin.zip` mehr.
+  Wer von Hand installiert, nimmt auf der Release-Seite „Source code (zip)“ oder das Tag-Archiv. Bestehende
+  Installationen finden das Update wie bisher von selbst.
+* **Netzschutz:** Die Zweitschrift der `configuration.yaml` nimmt nie mehr `GENERATE` auf, und solange
+  `coordinator_backup.json` da ist, schreibt das Plugin eine Zweitschrift mit `GENERATE` nie zurück – es sperrt den
+  Start mit klarer Meldung, statt ein neues Zigbee-Netz anzulegen. Ein Wechsel von `pan_id` von einer Zahl auf Text
+  gilt als Verlust.
+* **Update:** Einstellungen und Netzdaten werden mit Punktdateien und Zeitstempeln zurückkopiert und geprüft; die
+  Sicherung unter `/tmp` bleibt bei einem Fehler liegen, und zigbee2mqtt startet dann nicht. Ein vor dem Update
+  angehaltener Dienst bleibt angehalten. Apache wird nur neu geladen, wenn `php-yaml` frisch kam – kein
+  Neustart-Hinweis mehr.
+* **Haus-Themen:** neben `haus/tuer` jetzt `haus/klima`, `haus/wetter` und `haus/alarm` (je eigener Haken, ab Werk
+  aus), mit Lebenszeichen `haus/<familie>/zaehler/zigbee2mqttng` und Abräumen mit Rücklesen.
+* **Meldungen** per Signal (SignalBot) und Sprache (gemeinsame Sprachausgabe), je Anlass wählbar, mit Ruhezeit.
+* **Firmware-Anzeige:** Spalte „Firmware“ im Reiter Geräte, `…/update_verfuegbar` je Gerät mit OTA und
+  `…/zigbee2mqttng/updates` für Loxone (Gateway V2: anhaken). Eingespielt wird in der Zigbee2MQTT-Oberfläche.
+* **Kanalwahl:** ein Hinweissatz, welcher der Kanäle 15, 20 und 25 zu WLAN und Thread passt – kein Knopf.
+* Kleinere Dinge: `devices.yaml` wird unteilbar geschrieben, die Abfrage an zigbee2mqtt bricht ab, wenn der Broker
+  verschwindet, Sicherungen lassen sich nicht von fremden Seiten abrufen, die Formulare zeigen nach dem
+  Zurückspielen die neuen Werte, die Fassung des Plugins steht im Reiter Test.
+
 ## Neu in 4.2.4
 
 Umstellung auf MQTT nach der Hausform (Gruppe 5): Werte in einfache Virtuelle Eingänge, Hakenliste für
@@ -213,27 +238,53 @@ Jeder Tastendruck (`single`, `double`, `hold`, …) zählt einen Zähler hoch, d
 auf 0 zurück (`mqtt_resetaftersend.cfg`). In Loxone kommt so je Druck ein Impuls an – auch beim zweiten gleichen
 Druck hintereinander.
 
-### Haus-Themen für Türen und Schlösser (optional)
-Tür-/Fensterkontakte und Schlösser werden zusätzlich gemeldet unter
+### Haus-Themen für andere Plugins (optional)
+Andere Plugins lesen Werte des Hauses, ohne Zigbee zu kennen. Jede Familie hat im Reiter MQTT ihren eigenen Haken,
+ab Werk aus:
 
 | Thema | Wert | |
 |---|---|---|
 | `haus/tuer/<name>/offen` | 1 offen, 0 zu, `-` ohne Aussage | retained |
 | `haus/tuer/<name>/verriegelt` | 1 verriegelt, 0 nicht, `-` ohne Aussage | retained |
+| `haus/klima/<name>/temperatur` | °C, eine Nachkommastelle, −999 ohne Aussage | retained (4.2.5) |
+| `haus/klima/<name>/feuchte`, `…/druck`, `…/helligkeit`, `…/co2`, `…/pm25` | %, hPa, lx, ppm, µg/m³; −1 ohne Aussage | retained (4.2.5) |
+| `haus/klima/<name>/voc_ugm3` | VOC in µg/m³ (Standard von zigbee2mqtt), unverändert wie das Gerät es meldet; −1 ohne Aussage | retained (4.2.5) |
+| `haus/klima/<name>/voc_ppb` | VOC in ppb (Geräte, die VOC in ppb melden), unverändert; −1 ohne Aussage. Keine Umrechnung zwischen ppb und µg/m³ (sie hängt vom Gasgemisch ab); VOC ohne oder mit anderer Einheit liefert kein Feld | retained (4.2.5) |
+| `haus/klima/<name>/zeit` | Unix-Zeit der letzten Meldung des Geräts, −1 ohne Aussage | retained (4.2.5) |
+| `haus/wetter/<name>/…` | wie `haus/klima`, nur Temperatur, Feuchte, Druck, Helligkeit – nur Fühler, die als „außen“ markiert sind | retained (4.2.5) |
+| `haus/alarm/<name>/rauch`, `…/wasser`, `…/gas`, `…/co` | 1 Alarm, 0 ruhig, −1 ohne Aussage | retained (4.2.5) |
+| `haus/<familie>/<name>/anbieter` | `zigbee2mqttng` | retained (4.2.5) |
+| `haus/<familie>/zaehler/zigbee2mqttng` | Lebenszeichen 0…999 je Minute | **nie** retained (4.2.5) |
 
-Das ist dieselbe Hausvereinbarung wie in Matter2Lox, gelesen von Funkwacht und Beschattungswächter, mit denselben
-Regeln (Matter2Lox ab 0.9.35):
+Dieselbe Hausvereinbarung wie in Matter2Lox (Regeln/07 Nr. 15), mit denselben Regeln:
 
 * `<name>`: klein, Umlaute ausgeschrieben, alles außer `a-z 0-9 _ -` wird `_`. Einmal vergeben, **bleibt der Name
-  fest**, auch wenn das Gerät umbenannt wird (`data/zigbee2mqttng_haus_namen.json`).
+  fest**, auch wenn das Gerät umbenannt wird (`data/zigbee2mqttng_haus_namen.json`); ein Gerät hat in allen
+  Familien denselben Namen. `zaehler` und `anbieter` sind reserviert (`zaehler_2` …).
 * Steht unter einem Thema schon ein zurückbehaltener Wert eines **anderen Anbieters**, wird er nicht
   überschrieben; der Reiter Test nennt den Konflikt und Namen, die auch Matter2Lox vergibt.
-* Verschwindet ein Gerät, geht einmal `-` hinaus.
-* Abschalten und Deinstallation löschen die gesendeten Themen.
+* Nur die Felder, die das Gerät liefert; Ausreißer (Batterietod: 0 %, −40 °C …) außerhalb plausibler Grenzen
+  werden „ohne Aussage“. Ein Abnehmer verwendet `klima`/`wetter` nur, solange `zeit` jünger als eine Stunde ist
+  und sich der Zähler binnen 120 s ändert.
+* **Stumme Geräte:** Liegt die letzte Meldung eines Geräts (`zeit`) über eine Stunde zurück oder ist sie unbekannt,
+  sendet das Plugin selbst „ohne Aussage“: `temperatur` −999, alle übrigen Felder in `klima`/`wetter` −1, `alarm`
+  −1, `tuer` `-`. `zeit` bleibt der echte Zeitpunkt. Geprüft wird jede Minute; mit der nächsten Meldung kommen die
+  echten Werte zurück.
+* Welches Gerät wohin meldet (Raumklima, Wetter außen, nicht melden; Alarm melden ja/nein), steht in der Tabelle
+  „Geräte und Bereiche“ im Reiter MQTT.
+* Verschwindet ein Gerät, geht einmal „ohne Aussage“ hinaus.
+* Ausschalten einer Familie, Abwählen eines Geräts und die Deinstallation räumen die eigenen Themen am Broker ab
+  und **lesen zurück**, ob sie wirklich weg sind (`bin/haus-leeren.php`); fremde Themen bleiben unberührt.
+* Gesendet wird über die Verbindung von zigbee2mqtt direkt an den Broker; die Haus-Themen gehen nicht an das
+  MQTT-Gateway V2 und nicht nach Loxone (die Linien-Themen `zigbee2mqtt/<gerät>` tragen dieselben Werte).
 
-### Benachrichtigungen
-Optional schickt das Plugin LoxBerry-Benachrichtigungen, wenn ein Gerät nicht mehr erreichbar ist oder eine
-Batterie unter die Schwelle fällt (einmal je Batterie, Meldungen einer Minute zusammengefasst).
+### Meldungen: LoxBerry, Signal, Sprache
+Reiter Einstellungen, Abschnitt „Meldungen“: je Anlass (Gerät nicht mehr erreichbar, Batterie schwach, Alarm,
+Firmware-Update verfügbar) LoxBerry-Benachrichtigung, Signal über das Plugin SignalBot und Sprache über die
+gemeinsame Sprachausgabe (bis zu sechs Ziele). Signal und Sprache sind ab Werk aus. Für Signal muss im SignalBot
+„Befehle über MQTT annehmen“ an und zigbee2mqttng unter „Meldungen anderer Plugins annehmen von“ angehakt sein. In
+der Ruhezeit (ab Werk 22:00–07:00) wird nicht gesprochen – außer bei Alarm. Höchstens 10 Signal-Meldungen und 10
+Ansagen je Stunde.
 
 ### Loxone-Vorlagen
 Der Reiter „Einbindung in Loxone“ erzeugt aus der Geräteliste Vorlagen für Loxone Config:

@@ -11,7 +11,7 @@
  * base topic is still installed: it shares the topic, and its zigbee2mqtt
  * publishes there again - then only a <WARNING>.
  *
- * Goes through the UDP input of the MQTT gateway like clear-haus-topics.php:
+ * Goes through the UDP input of the MQTT gateway (as clear-haus-topics.php did up to 4.2.4):
  * "retain <topic> " with an empty value deletes the retained message. The
  * input drops datagrams under load, so every line is sent twice; whether
  * they arrived cannot be seen from here. With an own broker (not the one of
@@ -70,6 +70,18 @@ foreach (zng_state_devices(zng_read_json($daten . "/zigbee2mqttng_devices.json",
         $themen[] = $basis . "/" . $d["friendly_name"];
     }
 }
+// 4.2.5 (Gruppe 38, V9, T8-3): groups with retain: true in groups.yaml publish
+// their state retained as well (<topic>/<group>); until 4.2.4 they stayed
+$gruppenYaml = is_file($daten . "/groups.yaml") && function_exists("yaml_parse_file") ? @yaml_parse_file($daten . "/groups.yaml") : null;
+if (is_array($gruppenYaml)) {
+    foreach ($gruppenYaml as $g) {
+        if (is_array($g) && isset($g["friendly_name"]) && is_string($g["friendly_name"]) && zng_topic_ok($g["friendly_name"])
+            && isset($g["retain"]) && $g["retain"] === true) {
+            $themen[] = $basis . "/" . $g["friendly_name"];
+        }
+    }
+}
+$themen = array_values(array_unique($themen));
 
 if (!isset($mqtt["usemqttgateway"]) || zng_haken($mqtt["usemqttgateway"]) !== true) {
     echo "<WARNING> Own MQTT broker: " . count($themen) . " retained topic(s) of zigbee2mqtt below $basis/ were not removed (only the MQTT gateway can do that here).\n";

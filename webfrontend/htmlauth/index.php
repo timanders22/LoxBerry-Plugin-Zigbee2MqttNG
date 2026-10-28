@@ -28,6 +28,11 @@ require_once 'model/ServiceConfig.php';
 require_once 'model/MqttConfig.php';
 require_once LBPBINDIR . '/zigbee2mqttng.php';
 require_once __DIR__ . '/zng_bereiche.php';
+// 4.2.5 (Gruppe 38): the server forms (notifications, start block, test
+// buttons) - form token, POST only, 303 and a one-time message (Regeln/04).
+// A POST ends here; nothing below runs for it.
+require_once __DIR__ . '/zng_formulare.php';
+zng_formulare_post();
 
 // Positivliste der Reiter, ausgeschrieben: hausstandard_pruefen.py sucht sie
 // woertlich. Leiste und Bereiche unten stehen ebenso ausgeschrieben; die
@@ -160,6 +165,8 @@ Plugin::createHeader(isset($zng_skripte[$zng_tab]) ? $zng_skripte[$zng_tab] : ar
 .sm-tbl code { word-break: break-all; }
 .sm-step h3 { margin-top: 0; }
 .sm-wrap .sm-beanstandet { outline: 2px solid #c62828; }
+/* 4.2.5 (Gruppe 38, V9): ein Behaelter, der in sich rollt (Verbindungsliste der Netzkarte) */
+.sm-scroll { border: 1px solid #e0e0e0; border-radius: 4px; }
 .sm-wrap .sm-btn:disabled { opacity: 0.5 !important; cursor: default; }
 /* Welle Bild (Entscheidung 45): Bild der Bausteine aus dem gemeinsamen Musterprojekt. */
 .sm-bild { margin: 12px 0; }

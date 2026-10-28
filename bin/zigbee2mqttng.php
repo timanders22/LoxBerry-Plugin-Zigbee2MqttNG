@@ -26,13 +26,22 @@ function zng_read_json($file, $default = null)
 /**
  * Writes a file only when its content changed. The MQTT gateway watches the
  * subscription file and reloads on every write, so unchanged content is kept.
+ * 4.2.5 (Gruppe 38, V9): in one piece - first <file>.tmp.<pid>, then
+ * rename(); on failure the .tmp is removed and false is returned (the old
+ * file stays). Same as writeIfChanged() in zigbee2mqttng_extension.mjs.
+ * Returns true only when the file was written.
  */
 function zng_write_if_changed($file, $content)
 {
-    if (is_file($file) && file_get_contents($file) === $content) {
+    $content = (string) $content;
+    if (is_file($file) && @file_get_contents($file) === $content) {
         return false;
     }
-    file_put_contents($file, $content);
+    $tmp = $file . ".tmp." . getmypid();
+    if (@file_put_contents($tmp, $content) !== strlen($content) || !@rename($tmp, $file)) {
+        @unlink($tmp);
+        return false;
+    }
     return true;
 }
 
@@ -89,6 +98,285 @@ function zng_action_values($device)
 }
 
 /**
+ * 4.2.5 (Gruppe 38, E4): does the device support OTA (bridge/devices,
+ * definition.supports_ota - checked in zigbee2mqtt 2.12.0,
+ * lib/extension/bridge.ts)? Same as supportsOta() in the extension.
+ */
+function zng_supports_ota($device)
+{
+    return isset($device["definition"]["supports_ota"]) && $device["definition"]["supports_ota"] === true;
+}
+
+/**
+ * 4.2.5 (Gruppe 38, E1): fields of the house topics klima, wetter and alarm.
+ * One row: families ("kw" = klima and wetter, "k" = klima only, "a" =
+ * alarm), field, property in the exposes, unit required ("" = any), kind
+ * (z1 number with one decimal, z0 whole number, b yes/no), no statement,
+ * lowest and highest plausible value. Zigbee sensors like to report 0 % or
+ * -40 °C when the battery dies - values outside the limits are "no statement".
+ * VOC: passed on unchanged in the unit the device reports, the unit is in
+ * the name: µg/m³ (default of herdsman-converters e.voc()) -> voc_ugm3, ppb
+ * (e.voc().withUnit("ppb")) -> voc_ppb. Never converted - ppb <-> µg/m³
+ * depends on the gas mixture. VOC without a unit or with another unit gets
+ * no field.
+ * MUST BE WORD FOR WORD THE SAME AS HAUS_FELDER IN zigbee2mqttng_extension.mjs
+ * (the Test tab compares both, zng_haus_felder_gleich()).
+ */
+function zng_haus_felder()
+{
+    // HAUS_FELDER BEGIN
+    $zeilen = array(
+        array("kw", "temperatur", "temperature", "", "z1", -999, -60, 100),
+        array("kw", "feuchte", "humidity", "", "z0", -1, 0, 100),
+        array("kw", "druck", "pressure", "hPa", "z1", -1, 300, 1200),
+        array("kw", "helligkeit", "illuminance", "lx", "z0", -1, 0, 200000),
+        array("k", "co2", "co2", "", "z0", -1, 0, 10000),
+        array("k", "voc_ugm3", "voc", "µg/m³", "z0", -1, 0, 60000),
+        array("k", "voc_ppb", "voc", "ppb", "z0", -1, 0, 60000),
+        array("k", "pm25", "pm25", "", "z0", -1, 0, 1000),
+        array("a", "rauch", "smoke", "", "b", -1, 0, 1),
+        array("a", "wasser", "water_leak", "", "b", -1, 0, 1),
+        array("a", "gas", "gas", "", "b", -1, 0, 1),
+        array("a", "co", "carbon_monoxide", "", "b", -1, 0, 1),
+    );
+    // HAUS_FELDER END
+    return $zeilen;
+}
+
+/**
+ * 4.2.5 (E1): the two tables (PHP and the extension) as text, normalised
+ * (array( ) -> [ ], spaces), between the markers HAUS_FELDER BEGIN/END.
+ * Two independent texts - the PHP table is NOT read from the extension.
+ * Returns array(bool same, rows PHP, rows extension).
+ */
+function zng_haus_felder_gleich($phpDatei, $mjsDatei)
+{
+    $ziehen = function ($datei) {
+        $s = (string) @file_get_contents($datei);
+        if (!preg_match('#HAUS_FELDER BEGIN(.*?)//\s*HAUS_FELDER END#s', $s, $m)) {
+            return array();
+        }
+        $zeilen = array();
+        foreach (preg_split('/\r?\n/', $m[1]) as $z) {
+            $z = trim($z);
+            if (strpos($z, '"') === false) {
+                continue;
+            }
+            $z = str_replace(array("array(", ")"), array("[", "]"), $z);
+            $zeilen[] = preg_replace('/\s+/', '', rtrim($z, ","));
+        }
+        return $zeilen;
+    };
+    $a = $ziehen($phpDatei);
+    $b = $ziehen($mjsDatei);
+    return array($a !== array() && $a === $b, count($a), count($b));
+}
+
+/**
+ * 4.2.5 (E1): the rows of zng_haus_felder() a device has in its exposes
+ * (also nested in features), in the order of the table. Same as
+ * hausFelderGeraet() in the extension.
+ */
+function zng_haus_geraet_felder($device)
+{
+    $gefunden = array();
+    $walk = function ($exposes) use (&$walk, &$gefunden) {
+        foreach ((array) $exposes as $e) {
+            if (isset($e["features"]) && is_array($e["features"])) {
+                $walk($e["features"]);
+                continue;
+            }
+            foreach (zng_haus_felder() as $i => $r) {
+                if (!isset($e["property"]) || $e["property"] !== $r[2] || isset($gefunden[$i])) {
+                    continue;
+                }
+                $typ = isset($e["type"]) ? $e["type"] : "";
+                if ($r[4] === "b" ? $typ !== "binary" : $typ !== "numeric") {
+                    continue;
+                }
+                if ($r[3] !== "" && (!isset($e["unit"]) || $e["unit"] !== $r[3])) {
+                    continue;
+                }
+                $gefunden[$i] = true;
+            }
+        }
+    };
+    $walk(isset($device["definition"]["exposes"]) ? $device["definition"]["exposes"] : array());
+    $liste = array();
+    foreach (zng_haus_felder() as $i => $r) {
+        if (isset($gefunden[$i])) {
+            $liste[] = $r;
+        }
+    }
+    return $liste;
+}
+
+/** 4.2.5 (E1): a raw state value as the house value (rounded, plausible, else no statement). Same as hausWert(). */
+function zng_haus_wert($r, $roh)
+{
+    if ($r[4] === "b") {
+        if ($roh === true) {
+            return 1;
+        }
+        return $roh === false ? 0 : $r[5];
+    }
+    if (!(is_int($roh) || is_float($roh)) || is_nan((float) $roh) || $roh < $r[6] || $roh > $r[7]) {
+        return $r[5];
+    }
+    return $r[4] === "z1" ? round($roh, 1) : (int) round($roh);
+}
+
+/** 4.2.5 (E1): klima, wetter or aus for a device - the choice in hausBereiche, else klima with a klima field. */
+function zng_haus_bereich($ieee, $felder, $bereiche)
+{
+    $b = is_array($bereiche) && isset($bereiche[$ieee]) ? $bereiche[$ieee] : null;
+    if (in_array($b, array("klima", "wetter", "aus"), true)) {
+        return $b;
+    }
+    foreach ($felder as $r) {
+        if ($r[0] === "kw" || $r[0] === "k") {
+            return "klima";
+        }
+    }
+    return "aus";
+}
+
+/** 4.2.5 (E1): a device address as bridge/devices names it: 0x and 16 hex digits */
+function zng_ieee_ok($ieee)
+{
+    return is_string($ieee) && preg_match('/^0x[0-9a-f]{16}\z/', $ieee) === 1;
+}
+
+/**
+ * 4.2.5 (E1): the table "Devices for the house topics" from the form. Rows
+ * with a hidden index: hausGeraet[i] (IEEE), hausBereich[i] (klima, wetter,
+ * aus) and hausAlarm[i] (on/true when ticked). Every IEEE must be a device
+ * of the list; a device twice (e.g. once klima, once wetter) is refused - a
+ * device is in klima OR wetter, never in both.
+ * Returns array(errors (language keys), hausBereiche, hausAlarmAus).
+ */
+function zng_haus_bereiche_lesen($post, $devices)
+{
+    $fehler = array();
+    $bereiche = array();
+    $alarmAus = array();
+    $bekannt = array();
+    foreach (zng_state_devices($devices) as $d) {
+        if (isset($d["ieee_address"])) {
+            $bekannt[$d["ieee_address"]] = $d;
+        }
+    }
+    $ieees = isset($post["hausGeraet"]) && is_array($post["hausGeraet"]) ? $post["hausGeraet"] : array();
+    $gesehen = array();
+    foreach ($ieees as $i => $ieee) {
+        if (!zng_ieee_ok($ieee) || !isset($bekannt[$ieee])) {
+            $fehler[] = "Mqtt.ValHausGeraet";
+            continue;
+        }
+        if (isset($gesehen[$ieee])) {
+            $fehler[] = "Mqtt.ValHausDoppelt";
+            continue;
+        }
+        $gesehen[$ieee] = true;
+        $b = isset($post["hausBereich"][$i]) ? $post["hausBereich"][$i] : null;
+        if ($b !== null) {
+            if (!in_array($b, array("klima", "wetter", "aus"), true)) {
+                $fehler[] = "Mqtt.ValHausBereich";
+                continue;
+            }
+            $bereiche[$ieee] = $b;
+        }
+        $felder = zng_haus_geraet_felder($bekannt[$ieee]);
+        $istAlarm = false;
+        foreach ($felder as $r) {
+            $istAlarm = $istAlarm || $r[0] === "a";
+        }
+        if ($istAlarm) {
+            $a = isset($post["hausAlarm"][$i]) ? zng_haken($post["hausAlarm"][$i] === "on" ? "true" : $post["hausAlarm"][$i]) : false;
+            if ($a === null) {
+                $fehler[] = "Mqtt.ValSwitch";
+                continue;
+            }
+            if (!$a) {
+                $alarmAus[] = $ieee;
+            }
+        }
+    }
+    return array(array_values(array_unique($fehler)), $bereiche, $alarmAus);
+}
+
+/**
+ * 4.2.5 (E1): per family the devices that report and their fields:
+ * array(familie => array(ieee => array(rows))). The same choice as
+ * hausZuordnung() in the extension.
+ */
+function zng_haus_zuordnung($devices, $bereiche, $alarmAus)
+{
+    $z = array("klima" => array(), "wetter" => array(), "alarm" => array());
+    foreach (zng_state_devices($devices) as $d) {
+        if (!isset($d["ieee_address"])) {
+            continue;
+        }
+        $ieee = $d["ieee_address"];
+        $felder = zng_haus_geraet_felder($d);
+        $a = array_values(array_filter($felder, function ($r) {
+            return $r[0] === "a";
+        }));
+        if ($a && !in_array($ieee, (array) $alarmAus, true)) {
+            $z["alarm"][$ieee] = $a;
+        }
+        $bereich = zng_haus_bereich($ieee, $felder, $bereiche);
+        if ($bereich === "klima" || $bereich === "wetter") {
+            $kf = array_values(array_filter($felder, function ($r) use ($bereich) {
+                return $r[0] === "kw" || ($r[0] === "k" && $bereich === "klima");
+            }));
+            if ($kf) {
+                $z[$bereich][$ieee] = $kf;
+            }
+        }
+    }
+    return $z;
+}
+
+/**
+ * 4.2.5 (Gruppe 38, E5): Zigbee channels from {15, 20, 25} that neither
+ * overlap the WLAN channel (zng_wifi_overlap() "conflict") nor are equal or
+ * next (+-1) to the Thread channel. Only a hint - changing the channel means
+ * pairing every device again.
+ */
+function zng_kanal_vorschlag($zigbee, $thread, $wifi)
+{
+    $liste = array();
+    foreach (array(15, 20, 25) as $k) {
+        if ($wifi && zng_wifi_overlap($k, $wifi) === "conflict") {
+            continue;
+        }
+        if ($thread && abs($k - (int) $thread) <= 1) {
+            continue;
+        }
+        $liste[] = $k;
+    }
+    return $liste;
+}
+
+/**
+ * 4.2.5 (E5): the sentence for the channel. Returns array(passt (bool),
+ * text). $t = function (key) -> text.
+ */
+function zng_kanal_satz($zigbee, $thread, $wifi, $t)
+{
+    $passt = (int) $zigbee > 0 && !($wifi && zng_wifi_overlap($zigbee, $wifi) === "conflict")
+        && !($thread && abs((int) $zigbee - (int) $thread) <= 1);
+    if ($passt) {
+        $satz = sprintf($t("ServiceConfig.KanalPasst"), (int) $zigbee);
+    } else {
+        $liste = zng_kanal_vorschlag($zigbee, $thread, $wifi);
+        $satz = $liste ? sprintf($t("ServiceConfig.KanalBesser"), implode(", ", $liste)) : $t("ServiceConfig.KanalKeiner");
+    }
+    return array($passt, $satz . " " . $t("ServiceConfig.KanalKeinKnopf"));
+}
+
+/**
  * Devices that have state topics (no coordinator, usable name)
  */
 function zng_state_devices($devices)
@@ -123,6 +411,10 @@ function zng_subscription_lines($base, $devices, $groups, $availability, $haus)
         }
         if (count(zng_action_values($device)) > 0) {
             $lines[] = $base . "/" . $device["friendly_name"] . "/aktion/+";
+        }
+        // 4.2.5 (E4): firmware update of devices that support OTA
+        if (zng_supports_ota($device)) {
+            $lines[] = $base . "/" . $device["friendly_name"] . "/update_verfuegbar";
         }
     }
     foreach ((array) $groups as $group) {
@@ -537,10 +829,33 @@ function zng_yaml_merkworte()
 }
 
 /**
+ * 4.2.5 (Gruppe 38, V1): the keys below "advanced" whose value is still the
+ * text GENERATE - zigbee2mqtt replaces it by the real value on its first
+ * start (network_key, pan_id, ext_pan_id). Returns the list of those keys,
+ * empty if none. A configuration with GENERATE is never a second copy:
+ * written back after the network exists, it would form a NEW network.
+ */
+function zng_yaml_generate($data)
+{
+    $liste = array();
+    $a = is_array($data) && isset($data["advanced"]) && is_array($data["advanced"]) ? $data["advanced"] : array();
+    foreach (array("network_key", "pan_id", "ext_pan_id") as $key) {
+        if (array_key_exists($key, $a) && $a[$key] === "GENERATE") {
+            $liste[] = $key;
+        }
+    }
+    return $liste;
+}
+
+/**
  * What $neu lost compared with $alt (both parsed configuration.yaml):
  * a top level section, or one of the keys of zng_yaml_merkworte() (a list
  * such as the network key also when its length differs). Returns the list
  * of names, empty if nothing is missing.
+ * 4.2.5 (V1): also a change of type - a number or a list in $alt that is a
+ * text in $neu (pan_id 6754 -> GENERATE) is a loss. A number that changes
+ * into another number is NOT (channel 11 -> 15: the channel is changed on
+ * purpose through the form, update-config.php).
  */
 function zng_yaml_verlust($alt, $neu)
 {
@@ -559,6 +874,8 @@ function zng_yaml_verlust($alt, $neu)
         if (!array_key_exists($key, $n)) {
             $fehlt[] = "advanced." . $key;
         } elseif (is_array($a[$key]) && (!is_array($n[$key]) || count($n[$key]) !== count($a[$key]))) {
+            $fehlt[] = "advanced." . $key;
+        } elseif ((is_int($a[$key]) || is_array($a[$key])) && is_string($n[$key])) {
             $fehlt[] = "advanced." . $key;
         }
     }
@@ -616,13 +933,24 @@ function zng_zweitschrift_pfad($configDir, $name)
  * content: JSON an object with at least one key, YAML a non-empty mapping
  * that lost nothing the second copy has. An unreadable state never
  * overwrites a good second copy.
- * Returns "gezogen", "gleich", "ohne_inhalt" or "fehler".
+ * Returns "gezogen", "gleich", "ohne_inhalt", "ohne_yaml", "generate" or
+ * "fehler".
+ * 4.2.5 (V1): a configuration.yaml that still carries GENERATE (zigbee2mqtt
+ * has not formed the network yet) is never copied: "generate", an existing
+ * second copy stays unchanged. "ohne_yaml": php-yaml is not loaded, nothing
+ * could be checked (until 4.2.4 both were reported as "ohne_inhalt").
  */
 function zng_zweitschrift_ziehen($file, $art, $configDir, $name)
 {
     $ziel = zng_zweitschrift_pfad($configDir, $name);
     if ($art === "yaml") {
         list($lage, $data) = zng_yaml_lesen($file, $ziel);
+        if ($lage === "ohne_yaml") {
+            return "ohne_yaml";
+        }
+        if ($lage === "ok" && zng_yaml_generate($data)) {
+            return "generate";
+        }
         $inhalt = $lage === "ok" && is_array($data) && count($data) > 0;
     } else {
         $inhalt = zng_json_lage($file) === "ok" && count((array) json_decode((string) @file_get_contents($file), true)) > 0;
@@ -639,10 +967,40 @@ function zng_zweitschrift_ziehen($file, $art, $configDir, $name)
 }
 
 /**
+ * 4.2.5 (Gruppe 38, V1, measured in P-V1): a fresh installation writes the
+ * second copy of configuration.yaml once BEFORE setup-encryption.php - still
+ * without network key. setup-encryption.php then sets GENERATE, and until
+ * the next start of zigbee2mqtt that keyless copy would be the one that
+ * heals a damaged file - without the network. So setup-encryption.php sets
+ * it aside (<config dir>.alt.configuration.yaml, like "beiseite" in
+ * zweitschrift.php); the next start writes the second copy with the real
+ * values. Returns true when a copy was set aside.
+ */
+function zng_zweitschrift_yaml_beiseite($configDir)
+{
+    $zweit = zng_zweitschrift_pfad($configDir, "configuration.yaml");
+    if (!is_file($zweit)) {
+        return false;
+    }
+    $ziel = rtrim($configDir, "/\\") . ".alt.configuration.yaml";
+    if (!@rename($zweit, $ziel)) {
+        return false;
+    }
+    @chmod($ziel, ZNG_MODUS_GEHEIM);
+    return true;
+}
+
+/**
  * B1/B2: a file that exists but cannot be read. It stays where it is and
  * is copied to <file>.kaputt (0600) for the record. If its second copy is
  * readable, that is written back once ("geheilt"); otherwise nothing is
- * written ("gesperrt"). Returns array(action, path of the .kaputt copy).
+ * written ("gesperrt"). Returns array(action, path of the .kaputt copy)
+ * and, for configuration.yaml, a third element "generate" (see below).
+ * 4.2.5 (V1): a second copy that still carries GENERATE is never written
+ * back once coordinator_backup.json lies next to the file - the network
+ * exists, and GENERATE would form a new one (every device cut off). Then
+ * nothing is written: array("gesperrt", $kaputt, "generate"). Without
+ * coordinator_backup.json (fresh, never started) healing stays as before.
  */
 function zng_konfig_heilen($file, $art, $configDir, $name)
 {
@@ -655,6 +1013,9 @@ function zng_konfig_heilen($file, $art, $configDir, $name)
     if ($art === "yaml") {
         list($lage, $data) = zng_yaml_lesen($zweitschrift);
         $gut = $lage === "ok" && is_array($data) && count($data) > 0;
+        if ($gut && zng_yaml_generate($data) && is_file(dirname($file) . "/coordinator_backup.json")) {
+            return array("gesperrt", $kaputt, "generate");
+        }
     } else {
         $gut = zng_json_lage($zweitschrift) === "ok";
     }
@@ -710,6 +1071,61 @@ function zng_startsperre_datei()
 }
 
 /**
+ * 4.2.5 (Gruppe 38): the reasons in the start block, one list. A reason is a
+ * file name ("configuration.yaml"), a file name with a cause
+ * ("configuration.yaml(generate)", V1) or "rueckkopie" (postroot.sh, V3: the
+ * copy back of an update failed). Empty if there is no block.
+ */
+function zng_sperre_gruende()
+{
+    $datei = zng_startsperre_datei();
+    clearstatcache(true, $datei);
+    if (!is_file($datei)) {
+        return array();
+    }
+    $liste = array();
+    foreach (explode(",", trim((string) @file_get_contents($datei))) as $g) {
+        $g = trim($g);
+        if ($g !== "" && !in_array($g, $liste, true)) {
+            $liste[] = $g;
+        }
+    }
+    return $liste;
+}
+
+/** The file names among the reasons, without the cause in brackets and without "rueckkopie". */
+function zng_sperre_dateien($gruende)
+{
+    $namen = array();
+    foreach ((array) $gruende as $g) {
+        $n = preg_replace('/\(.*\)\z/', '', (string) $g);
+        if ($n !== "rueckkopie" && $n !== "" && !in_array($n, $namen, true)) {
+            $namen[] = $n;
+        }
+    }
+    return $namen;
+}
+
+/**
+ * Writes the start block with the given reasons (0600, in one piece), or
+ * removes it when the list is empty. Returns true when the file says what
+ * was asked afterwards.
+ */
+function zng_sperre_schreiben($gruende)
+{
+    $datei = zng_startsperre_datei();
+    $gruende = array_values(array_unique(array_filter(array_map("strval", (array) $gruende), "strlen")));
+    if (!$gruende) {
+        if (is_file($datei)) {
+            @unlink($datei);
+        }
+        clearstatcache(true, $datei);
+        return !file_exists($datei);
+    }
+    return zng_schreiben_atomar($datei, implode(",", $gruende) . "\n", ZNG_MODUS_GEHEIM);
+}
+
+/**
  * For the settings pages and the Test tab: every file that is broken or
  * kept as .kaputt, the start block and the second copies.
  */
@@ -727,11 +1143,273 @@ function zng_konfig_anzeige()
         );
     }
     $sperre = zng_startsperre_datei();
+    $gruende = zng_sperre_gruende();
+    $yamlDatei = zng_konfig_dateien()["configuration.yaml"][0];
     return array(
         "dateien" => $zeilen,
         "sperre" => is_file($sperre) ? trim((string) @file_get_contents($sperre)) : "",
+        // 4.2.5 (V1, V3): the reasons separately, for their own paragraph
+        "gruende" => $gruende,
+        "generate" => in_array("configuration.yaml(generate)", $gruende, true),
+        "rueckkopie" => in_array("rueckkopie", $gruende, true),
+        "backupDa" => is_file(dirname($yamlDatei) . "/coordinator_backup.json"),
         "zweitschriftOrdner" => dirname(zng_konfig_ordner()),
     );
+}
+
+/**
+ * 4.2.5 (V1): network protection for the Test tab - only yes/no, never a
+ * value: does the second copy of configuration.yaml carry GENERATE, does
+ * coordinator_backup.json exist. Returns array(zweitschrift: bool|null
+ * (null = no second copy or php-yaml missing), backup: bool).
+ */
+function zng_netzschutz_lage()
+{
+    $datei = zng_konfig_dateien()["configuration.yaml"][0];
+    $zweit = zng_zweitschrift_pfad(zng_konfig_ordner(), "configuration.yaml");
+    $generate = null;
+    if (is_file($zweit) && function_exists("yaml_parse")) {
+        $d = @yaml_parse((string) @file_get_contents($zweit));
+        $generate = is_array($d) ? (bool) zng_yaml_generate($d) : null;
+    }
+    return array("zweitschrift" => $generate, "backup" => is_file(dirname($datei) . "/coordinator_backup.json"));
+}
+
+/* ==================================================================
+ * 4.2.5 (Gruppe 38, E2): notifications - occasions x ways
+ * ================================================================== */
+
+/** The occasions and the ways of the table on the Settings tab */
+const ZNG_ANLAESSE = array("offline", "batterie", "alarm", "update");
+const ZNG_WEGE = array("lb", "signal", "sprache");
+
+/** Defaults of meldungen.json: LoxBerry notification for offline and battery as before, everything else off */
+function zng_meldungen_vorgaben()
+{
+    return array(
+        "lb" => array("offline" => true, "batterie" => true, "alarm" => false, "update" => false),
+        "signal" => array("offline" => false, "batterie" => false, "alarm" => false, "update" => false),
+        "sprache" => array("offline" => false, "batterie" => false, "alarm" => false, "update" => false),
+        "batterieSchwelle" => 15,
+        "signalEin" => false,
+        "signalPraefix" => "signalbot",
+        "spracheEin" => false,
+        "ruheVon" => "22:00",
+        "ruheBis" => "07:00",
+        "tts" => array(),
+    );
+}
+
+/** State of meldungen.json: fehlt, ok, kaputt (Regeln/05) */
+function zng_meldungen_lage()
+{
+    global $meldungenFile;
+    return zng_json_lage($meldungenFile);
+}
+
+/**
+ * meldungen.json with all keys. Without the file (update from 4.2.4) the
+ * LoxBerry column and the threshold come from service.json (notifyOffline,
+ * notifyBattery, batteryThreshold) - the transition loses nothing. A broken
+ * file gives the defaults and "kaputt" (the page shows it, nothing is sent
+ * through Signal or speech).
+ * Returns array(meldungen, lage).
+ */
+function zng_meldungen_laden()
+{
+    global $meldungenFile, $configfile;
+    $m = zng_meldungen_vorgaben();
+    $lage = zng_json_lage($meldungenFile);
+    if ($lage === "ok") {
+        $d = json_decode((string) @file_get_contents($meldungenFile), true);
+        foreach ($m as $k => $v) {
+            if (!array_key_exists($k, $d)) {
+                continue;
+            }
+            if (is_array($v) && $k !== "tts") {
+                foreach ($v as $a => $w) {
+                    if (isset($d[$k][$a]) && is_bool($d[$k][$a])) {
+                        $m[$k][$a] = $d[$k][$a];
+                    }
+                }
+            } else {
+                $m[$k] = $d[$k];
+            }
+        }
+    } elseif ($lage === "fehlt") {
+        $s = zng_read_json($configfile, array());
+        $s = is_array($s) ? $s : array();
+        if (array_key_exists("notifyOffline", $s) && zng_haken($s["notifyOffline"]) !== null) {
+            $m["lb"]["offline"] = zng_haken($s["notifyOffline"]);
+        }
+        if (array_key_exists("notifyBattery", $s) && zng_haken($s["notifyBattery"]) !== null) {
+            $m["lb"]["batterie"] = zng_haken($s["notifyBattery"]);
+        }
+        if (isset($s["batteryThreshold"]) && zng_zahl_text($s["batteryThreshold"], 1, 99, '/^[0-9]{1,2}\z/') !== null) {
+            $m["batterieSchwelle"] = (int) $s["batteryThreshold"];
+        }
+    }
+    if (!is_array($m["tts"])) {
+        $m["tts"] = array();
+    }
+    return array($m, $lage);
+}
+
+/**
+ * Checks the values of meldungen.json except the speech block (that is the
+ * module's, ansage_formular_lesen()/ansage_wert_pruefen()). Returns
+ * array(list of array(language key, field), normalised values).
+ */
+function zng_meldungen_pruefen($werte, $alt)
+{
+    $fehler = array();
+    $neu = $alt;
+    foreach (ZNG_WEGE as $weg) {
+        if (!array_key_exists($weg, $werte)) {
+            continue;
+        }
+        if (!is_array($werte[$weg])) {
+            $fehler[] = array("Meldungen.ValHaken", $weg);
+            continue;
+        }
+        foreach ($werte[$weg] as $anlass => $w) {
+            $b = zng_haken($w);
+            if (!in_array($anlass, ZNG_ANLAESSE, true) || $b === null) {
+                $fehler[] = array("Meldungen.ValHaken", $weg . "[" . $anlass . "]");
+                continue;
+            }
+            $neu[$weg][$anlass] = $b;
+        }
+    }
+    foreach (array("signalEin", "spracheEin") as $k) {
+        if (array_key_exists($k, $werte)) {
+            $b = zng_haken($werte[$k]);
+            if ($b === null) {
+                $fehler[] = array("Meldungen.ValHaken", $k);
+            } else {
+                $neu[$k] = $b;
+            }
+        }
+    }
+    if (array_key_exists("batterieSchwelle", $werte)) {
+        $z = zng_zahl_text($werte["batterieSchwelle"], 1, 99, '/^[0-9]{1,2}\z/');
+        if ($z === null) {
+            $fehler[] = array("Meldungen.ValSchwelle", "batterieSchwelle");
+        } else {
+            $neu["batterieSchwelle"] = (int) $z;
+        }
+    }
+    if (array_key_exists("signalPraefix", $werte)) {
+        $p = $werte["signalPraefix"];
+        if (!is_string($p) || !preg_match('#^[a-z0-9_]{1,40}(/[a-z0-9_]{1,40}){0,3}\z#', $p)) {
+            $fehler[] = array("Meldungen.ValPraefix", "signalPraefix");
+        } else {
+            $neu["signalPraefix"] = $p;
+        }
+    }
+    foreach (array("ruheVon", "ruheBis") as $k) {
+        if (array_key_exists($k, $werte)) {
+            $z = $werte[$k];
+            if (!is_string($z) || !preg_match('/^([01][0-9]|2[0-3]):[0-5][0-9]\z/', $z)) {
+                $fehler[] = array("Meldungen.ValZeit", $k);
+            } else {
+                $neu[$k] = $z;
+            }
+        }
+    }
+    return array($fehler, $neu);
+}
+
+/** Writes meldungen.json (0600, in one piece) and its second copy. Returns true on success. */
+function zng_meldungen_speichern($m)
+{
+    global $meldungenFile;
+    $roh = json_encode($m, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if (!is_string($roh) || !zng_schreiben_wenn_anders($meldungenFile, $roh . "\n", ZNG_MODUS_GEHEIM)) {
+        return false;
+    }
+    zng_zweitschrift_ziehen($meldungenFile, "json", dirname($meldungenFile), "meldungen.json");
+    return true;
+}
+
+/**
+ * 4.2.5 (E2): the context $k of the speech module (sprachausgabe.php 1.2.0):
+ * web port, https port, own data folder for <art>_letzte.json, sender
+ * zigbee2mqttng (Alexa NG), translator of the line. Expects the module to
+ * be loaded when 'port' is to be read.
+ */
+function zng_ansage_k()
+{
+    global $L;
+    $general = LBHOMEDIR . "/config/system/general.json";
+    return array(
+        "port" => function_exists("ansage_webport") ? ansage_webport($general) : 80,
+        "sslport" => function_exists("ansage_sslport") ? ansage_sslport($general) : 0,
+        "kopf" => array("User-Agent: LoxBerry Zigbee2MqttNG"),
+        "ordner" => LBPDATADIR,
+        "absender" => "zigbee2mqttng",
+        "t" => function ($s) use ($L) {
+            return isset($L[$s]) ? $L[$s] : $s;
+        },
+    );
+}
+
+/** Is at least one way on for an occasion? (for the bridge configuration of the extension) */
+function zng_meldungen_anlass_an($m, $anlass)
+{
+    return !empty($m["lb"][$anlass]) || (!empty($m["signalEin"]) && !empty($m["signal"][$anlass]))
+        || (!empty($m["spracheEin"]) && !empty($m["sprache"][$anlass]));
+}
+
+/** Is the time "H:i" within the quiet time von-bis (over midnight when von > bis)? */
+function zng_ruhezeit($jetzt, $von, $bis)
+{
+    $z = function ($s) {
+        return preg_match('/^(\d{2}):(\d{2})\z/', (string) $s, $m) ? (int) $m[1] * 60 + (int) $m[2] : -1;
+    };
+    $j = $z($jetzt);
+    $a = $z($von);
+    $b = $z($bis);
+    if ($j < 0 || $a < 0 || $b < 0 || $a === $b) {
+        return false;
+    }
+    return $a < $b ? ($j >= $a && $j < $b) : ($j >= $a || $j < $b);
+}
+
+/**
+ * 4.2.5 (E2): the brake - at most $grenze per hour and kind ("signal",
+ * "sprache"), counted in a file under a lock. Returns true when this one
+ * may go out (and counts it).
+ */
+function zng_bremse_frei($datei, $art, $grenze = 10, $jetzt = null)
+{
+    $jetzt = $jetzt === null ? time() : (int) $jetzt;
+    $fh = @fopen($datei, "c+");
+    if ($fh === false) {
+        return false;
+    }
+    @chmod($datei, 0600);
+    flock($fh, LOCK_EX);
+    $d = json_decode((string) stream_get_contents($fh), true);
+    $d = is_array($d) ? $d : array();
+    $liste = array();
+    foreach (isset($d[$art]) && is_array($d[$art]) ? $d[$art] : array() as $t) {
+        if (is_int($t) && $t > $jetzt - 3600 && $t <= $jetzt) {
+            $liste[] = $t;
+        }
+    }
+    $frei = count($liste) < $grenze;
+    if ($frei) {
+        $liste[] = $jetzt;
+    }
+    $d[$art] = $liste;
+    ftruncate($fh, 0);
+    rewind($fh);
+    fwrite($fh, json_encode($d));
+    fflush($fh);
+    flock($fh, LOCK_UN);
+    fclose($fh);
+    return $frei;
 }
 
 /* ---------------- value checks (B11) ----------------
@@ -969,6 +1647,13 @@ function zng_device_ios($base, $devices, $availability)
                 "udp" => $topic . "/erreichbar", "unit" => "", "analog" => false, "min" => 0, "max" => 1,
                 "kachel" => zng_kachel($name, "erreichbar"));
         }
+        // 4.2.5 (E4): 1 update available, 0 none, -1 no statement - only for devices with OTA
+        if (zng_supports_ota($device)) {
+            $entry["inputs"][] = array("title" => zng_title($name, "update_verfuegbar"), "property" => "update_verfuegbar",
+                "type" => "ota", "vi" => zng_gateway_name($topic . "/update_verfuegbar"),
+                "udp" => $topic . "/update_verfuegbar", "unit" => "", "analog" => true, "min" => -1, "max" => 1,
+                "kachel" => zng_kachel($name, "Update"));
+        }
         $list[] = $entry;
     }
     return $list;
@@ -1193,8 +1878,10 @@ function zng_lebenszeichen_ios($base)
 {
     global $L;
     $liste = array();
-    foreach (array("ts" => array("Loxone.KachelTs", "Lebenszeichen Zeit", "", 2147483647),
-                   "zaehler" => array("Loxone.KachelZaehler", "Lebenszeichen Zähler", "", 999)) as $wert => $t) {
+    // 4.2.5 (E4): updates = devices with a firmware update, -1 = no statement yet
+    foreach (array("ts" => array("Loxone.KachelTs", "Lebenszeichen Zeit", "", 2147483647, 0),
+                   "zaehler" => array("Loxone.KachelZaehler", "Lebenszeichen Zähler", "", 999, 0),
+                   "updates" => array("Loxone.KachelUpdates", "Firmware-Updates", "", 500, -1)) as $wert => $t) {
         $topic = $base . "/" . ZNG_LEBENSZEICHEN . "/" . $wert;
         $liste[] = array(
             "title" => zng_title(ZNG_LEBENSZEICHEN, $wert),
@@ -1205,7 +1892,7 @@ function zng_lebenszeichen_ios($base)
             "unit" => $t[2],
             "kachel" => "Zigbee2MqttNG: " . (isset($L[$t[0]]) ? $L[$t[0]] : $t[1]),
             "analog" => true,
-            "min" => 0,
+            "min" => $t[4],
             "max" => $t[3],
         );
     }
@@ -1290,17 +1977,24 @@ function zng_v2_liste($base, $devices, $availability, $groups = array())
     $t = $base . "/" . ZNG_LEBENSZEICHEN . "/zaehler";
     $rows[] = array("thema" => $t, "json" => false, "felder" => array(), "reset" => false,
         "namen" => array(zng_gateway_name($t)), "gruppe" => false);
+    // 4.2.5 (E4): number of devices with a firmware update (no JSON, no reset)
+    $t = $base . "/" . ZNG_LEBENSZEICHEN . "/updates";
+    $rows[] = array("thema" => $t, "json" => false, "felder" => array(), "reset" => false,
+        "namen" => array(zng_gateway_name($t)), "gruppe" => false);
     foreach (zng_device_ios($base, $devices, $availability) as $d) {
         $topic = $base . "/" . $d["name"];
         $felder = array();
         $namen = array();
         $aktionen = array();
         $erreichbar = null;
+        $ota = null;
         foreach ($d["inputs"] as $in) {
             if ($in["type"] === "action") {
                 $aktionen[] = $in;
             } elseif ($in["property"] === "erreichbar") {
                 $erreichbar = $in;
+            } elseif ($in["type"] === "ota") {
+                $ota = $in;
             } elseif (empty($in["text"])) {
                 $felder[] = $in["property"];
                 $namen[] = $in["vi"];
@@ -1313,6 +2007,10 @@ function zng_v2_liste($base, $devices, $availability, $groups = array())
         if ($erreichbar !== null) {
             $rows[] = array("thema" => $erreichbar["udp"], "json" => false, "felder" => array(), "reset" => false,
                 "namen" => array($erreichbar["vi"]), "gruppe" => false);
+        }
+        if ($ota !== null) {
+            $rows[] = array("thema" => $ota["udp"], "json" => false, "felder" => array(), "reset" => false,
+                "namen" => array($ota["vi"]), "gruppe" => false);
         }
         foreach ($aktionen as $in) {
             $rows[] = array("thema" => $in["udp"], "json" => false, "felder" => array(), "reset" => true,
@@ -1332,11 +2030,13 @@ function zng_v2_liste($base, $devices, $availability, $groups = array())
 /**
  * 4.2.4 (Entwurf zb 2.4): the 11 data points on 7 subscriptions the two sample pages "Zigbee2MqttNG" and
  * "Zigbee2MqttNG Geraete" need (Musterprojekt/baustein_listen.txt). Fixed device names of the sample project.
+ * 4.2.5 (Gruppe 38, E4): plus zigbee2mqttng/updates (#16 of the sample page) - 12 data points on 8 subscriptions.
  */
 function zng_v2_muster($base)
 {
     $muster = array(
         array(ZNG_LEBENSZEICHEN . "/zaehler", array(), false),
+        array(ZNG_LEBENSZEICHEN . "/updates", array(), false),
         array("Wohnzimmer_Sensor", array("temperature", "humidity", "battery"), false),
         array("Wohnzimmer_Sensor/erreichbar", array(), false),
         array("Wohnzimmer_Steckdose", array("state", "power", "energy"), false),

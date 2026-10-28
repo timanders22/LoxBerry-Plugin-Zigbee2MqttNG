@@ -73,6 +73,8 @@ function loadRadioInfo() {
             }
         }
         box.html(level ? `<div class="${level}">${lines.join("<br>")}</div>` : lines.join("<br>"));
+        // 4.2.5 (Gruppe 38, E5): the channel sentence - built on the server, shown as text
+        $("#kanalsatz").text(info.kanalSatz || "");
     });
 }
 
@@ -178,7 +180,25 @@ function restoreSettings() {
                 if (answer.fehlend > 0) {
                     text += " " + String(box.data("fehlend")).replace("%d", answer.fehlend);
                 }
-                box.attr("class", answer.ok ? "sm-warnung" : "sm-fehler").text(text + " " + dienstText(answer));
+                text += " " + dienstText(answer) + " " + hausText(answer);
+                if ((answer.kaputt_beiseite || []).length > 0) {
+                    text += " " + String(box.data("kaputt")).replace("%s", answer.kaputt_beiseite.join(", "));
+                }
+                if ((answer.teile || []).indexOf("meldungen") >= 0) {
+                    text += " " + box.data("meldungen");
+                }
+                const klasse = answer.ok ? "sm-warnung" : "sm-fehler";
+                // 4.2.5 (Gruppe 38, V4, T5-3): the form still showed the values from before
+                // the restore - load them again, like when the page opens, and only then
+                // say what happened
+                Promise.all([fetchFormData("ServiceConfig"), Promise.resolve(loadRadioInfo()), Promise.resolve(getPid())])
+                    .then(function (r) {
+                        setFormData("ServiceConfig", r[0]);
+                        checkPort();
+                        box.attr("class", klasse).text(text + " " + box.data("neugeladen"));
+                    }, function () {
+                        box.attr("class", "sm-warnung").text(text + " " + box.data("nichtneugeladen"));
+                    });
             } else {
                 const list = $("<ul>");
                 ((answer && answer.errors) || []).forEach(function (e) {

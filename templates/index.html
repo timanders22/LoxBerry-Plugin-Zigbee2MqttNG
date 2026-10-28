@@ -1,6 +1,8 @@
 {% import 'macros.html' as m %}
 
+{{ einmal | raw }}
 {{ m.konfiglage(konfig) }}
+{{ sperre_html | raw }}
 {{ m.predecessors(predecessors) }}
 {# 4.2.0: grey only where the button of the masked token stands #}
 {{ m.legende(service.enableUI and service.frontendAuth and service.frontendToken ? ['lesen', 'technik', 'aktion'] : ['lesen', 'aktion']) }}
@@ -83,6 +85,8 @@
         data-wifi="{{ 'ServiceConfig.RadioWifi' | trans }}"
         data-wificonflict="{{ 'ServiceConfig.RadioWifiConflict' | trans }}"
         data-wifinear="{{ 'ServiceConfig.RadioWifiNear' | trans }}"></div>
+    {# 4.2.5 (Gruppe 38, E5): which of the channels 15, 20, 25 fits - only a sentence, no button #}
+    <p class="sm-hilfe" id="kanalsatz"></p>
     {% endset %}
     {{ m.row('ServiceConfig[channel]', 'ServiceConfig.LabelChannel' | trans, f, 'ServiceConfig.HintChannel' | trans) }}
 
@@ -103,20 +107,18 @@
     {{ m.row('', 'ServiceConfig.LabelFrontendToken' | trans, f, 'ServiceConfig.HintFrontendToken' | trans) }}
     {% endif %}
 
-    <!-- ============ Notifications ============ -->
-    <h2>{{ 'ServiceConfig.NotifyTitle' | trans }}</h2>
-
-        {{ m.haken('ServiceConfig[notifyOffline]', 'ServiceConfig.LabelNotifyOffline' | trans, 'ServiceConfig.HintNotifyOffline' | trans, '') }}
-
-        {{ m.haken('ServiceConfig[notifyBattery]', 'ServiceConfig.LabelNotifyBattery' | trans, 'ServiceConfig.HintNotifyBattery' | trans, '') }}
-
-    {% set f %}<input value="" id="ServiceConfig[batteryThreshold]" name="ServiceConfig[batteryThreshold]" type="text" class="textfield" data-role="none" inputmode="numeric">{% endset %}
-    {{ m.row('ServiceConfig[batteryThreshold]', 'ServiceConfig.LabelBatteryThreshold' | trans, f, 'ServiceConfig.HintBatteryThreshold' | trans) }}
 </form>
 
 {{ m.savebutton() }}
 
 {{ m.dienstknoepfe() }}
+
+<hr>
+{# 4.2.5 (Gruppe 38, E2): occasions x ways - own form "meldungen" (server form with form token,
+   303 and one-time message); the switches notifyOffline/notifyBattery/batteryThreshold moved here #}
+<h2>{{ 'ServiceConfig.NotifyTitle' | trans }}</h2>
+<p class="sm-hilfe">{{ 'Meldungen.Desc' | trans }}</p>
+{{ meldungen_html | raw }}
 
 <hr>
 <h2>{{ 'Backup.Title' | trans }}</h2>
@@ -137,7 +139,11 @@
     data-ok="{{ 'Sicherung.Ok' | trans }}"
     data-fehlend="{{ 'Sicherung.Fehlend' | trans }}"
     data-abgelehnt="{{ 'Sicherung.Abgelehnt' | trans }}"
-    data-keinedatei="{{ 'Sicherung.KeineDatei' | trans }}"></div>
+    data-keinedatei="{{ 'Sicherung.KeineDatei' | trans }}"
+    data-neugeladen="{{ 'Sicherung.Neugeladen' | trans }}"
+    data-nichtneugeladen="{{ 'Sicherung.NichtNeugeladen' | trans }}"
+    data-meldungen="{{ 'Sicherung.MeldungenNeuLaden' | trans }}"
+    data-kaputt="{{ 'Sicherung.KaputtBeiseite' | trans }}"></div>
 
 <!-- the Zigbee network: ZIP made by zigbee2mqtt itself -->
 <h3>{{ 'Backup.NetzTitel' | trans }}</h3>

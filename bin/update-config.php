@@ -36,7 +36,18 @@ $lage = zng_konfig_lage();
 $kaputt = array_keys(array_filter($lage, function ($l) {
     return $l === "kaputt";
 }));
-if ($kaputt && is_file($sperre) && trim((string) @file_get_contents($sperre)) === implode(",", $kaputt)) {
+$gruende = zng_sperre_gruende();
+// 4.2.5 (Gruppe 38, V3): postroot.sh could not copy the configuration back
+// after an update - the backup is still in /tmp. Nothing is written here,
+// whatever the files look like (a missing configuration.yaml would be
+// written anew WITHOUT the network key). Only "Lift the start block" on the
+// Settings tab removes this reason; postroot.sh reported it already.
+if (in_array("rueckkopie", $gruende, true)) {
+    exit(3);
+}
+// the same reason as last time (also "configuration.yaml(generate)", V1) is
+// reported once, not every 30 s
+if ($kaputt && zng_sperre_dateien($gruende) === $kaputt) {
     exit(3);
 }
 
@@ -51,28 +62,42 @@ if (in_array("ohne_yaml", $lage, true)) {
 }
 
 $gesperrt = array();
+$nurGenerate = true;
 foreach ($kaputt as $name) {
     list($datei, $art) = zng_konfig_dateien()[$name];
-    list($aktion, $kaputtDatei) = zng_konfig_heilen($datei, $art, $konfigOrdner, $name);
+    $heilung = zng_konfig_heilen($datei, $art, $konfigOrdner, $name);
+    list($aktion, $kaputtDatei) = $heilung;
+    if ($aktion === "gesperrt" && isset($heilung[2]) && $heilung[2] === "generate") {
+        // 4.2.5 (V1): the second copy still carries GENERATE and the network
+        // exists (coordinator_backup.json) - writing it back would form a new
+        // network. Not written, start blocked with its own reason.
+        $gesperrt[] = $name . "(generate)";
+        LOGCRIT("$name is damaged and its second copy still carries GENERATE. Writing it back would form a new Zigbee network and cut off every device - nothing was written, zigbee2mqtt is not started. The unreadable file is kept as $kaputtDatei; coordinator_backup.json stays in the data folder.");
+        notify(LBPPLUGINDIR, "zigbee", "Zigbee2MqttNG: " . (isset($L["Notify.Generate"]) ? $L["Notify.Generate"] : "configuration.yaml ist beschädigt, und ihre Zweitschrift trägt noch GENERATE. Ein Zurückschreiben würde ein neues Zigbee-Netz anlegen und alle Geräte trennen – zigbee2mqtt wird nicht gestartet. Die Sicherung coordinator_backup.json liegt im Datenordner; was zu tun ist, steht im Reiter Einstellungen."), true);
+        continue;
+    }
     if ($aktion === "geheilt") {
         LOGWARN("$name could not be read. The unreadable file is kept as $kaputtDatei; $name was restored from its second copy " . zng_zweitschrift_pfad($konfigOrdner, $name) . ". Please check the settings.");
         notify(LBPPLUGINDIR, "zigbee", "Zigbee2MqttNG: $name war beschädigt und wurde aus der Zweitschrift wiederhergestellt. Die beschädigte Datei liegt als $kaputtDatei. Bitte die Einstellungen prüfen.", true);
     } else {
         $gesperrt[] = $name;
+        $nurGenerate = false;
         LOGCRIT("$name could not be read and has no readable second copy. It is kept unchanged (copy: $kaputtDatei). Nothing was written, zigbee2mqtt is not started.");
     }
 }
 if ($gesperrt) {
     $grund = implode(",", $gesperrt);
-    if (!zng_schreiben_atomar($sperre, $grund . "\n", ZNG_MODUS_GEHEIM)) {
+    if (!zng_sperre_schreiben($gesperrt)) {
         LOGCRIT("The start block $sperre could not be written either - zigbee2mqtt may start with an unreadable configuration.");
     }
-    notify(LBPPLUGINDIR, "zigbee", "Zigbee2MqttNG: $grund nicht lesbar - zigbee2mqtt wird nicht gestartet, damit das Zigbee-Netz nicht verloren geht. Was zu tun ist, steht im Reiter Einstellungen.", true);
-    LOGEND("Update configuration stopped - start blocked");
+    if (!$nurGenerate) {
+        notify(LBPPLUGINDIR, "zigbee", "Zigbee2MqttNG: " . implode(",", zng_sperre_dateien($gesperrt)) . " nicht lesbar - zigbee2mqtt wird nicht gestartet, damit das Zigbee-Netz nicht verloren geht. Was zu tun ist, steht im Reiter Einstellungen.", true);
+    }
+    LOGEND("Update configuration stopped - start blocked ($grund)");
     exit(3);
 }
 if (is_file($sperre)) {
-    @unlink($sperre);
+    zng_sperre_schreiben(array());
     LOGOK("All configuration files are readable again - start block removed");
 }
 
@@ -269,6 +294,14 @@ if (!is_dir(dirname($extensionTargetFile))) {
 if (is_file($extensionSourceFile)) {
     zng_write_if_changed($extensionTargetFile, file_get_contents($extensionSourceFile));
 }
+// 4.2.5 (Gruppe 38, E2): which occasions are reported at all - an occasion
+// with at least one way on (meldungen.json; without it notifyOffline,
+// notifyBattery and batteryThreshold of service.json, as up to 4.2.4).
+// notify.php decides the ways itself.
+list($meldungen, $meldungenLage) = zng_meldungen_laden();
+if ($meldungenLage === "kaputt") {
+    LOGWARN("meldungen.json cannot be read - notifications with the defaults until it is saved again (Settings tab)");
+}
 zng_write_if_changed($bridgeConfigFile, json_encode(array(
     "registerTopics" => $registerTopics,
     "forwardMode" => $mqttcfg->forwardMode,
@@ -276,6 +309,12 @@ zng_write_if_changed($bridgeConfigFile, json_encode(array(
     "resetFile" => $mqttGatewayResetFile,
     "availability" => $availability,
     "hausTopics" => $haus,
+    // 4.2.5 (E1): the families klima, wetter, alarm and the choice per device
+    "hausKlima" => (bool) is_enabled($mqttcfg->hausKlima),
+    "hausWetter" => (bool) is_enabled($mqttcfg->hausWetter),
+    "hausAlarm" => (bool) is_enabled($mqttcfg->hausAlarm),
+    "hausBereiche" => (object) (is_array($mqttcfg->hausBereiche) ? $mqttcfg->hausBereiche : array()),
+    "hausAlarmAus" => array_values(is_array($mqttcfg->hausAlarmAus) ? $mqttcfg->hausAlarmAus : array()),
     "devicesFile" => $bridgeDevicesFile,
     "groupsFile" => $bridgeGroupsFile,
     "infoFile" => $bridgeInfoFile,
@@ -283,9 +322,12 @@ zng_write_if_changed($bridgeConfigFile, json_encode(array(
     "hausNamesFile" => $hausNamesFile,
     "statusFile" => $bridgeStatusFile,
     "availabilityFile" => $availabilityFile,
-    "notifyOffline" => $availability && is_enabled($serviceCfg->notifyOffline),
-    "notifyBattery" => (bool) is_enabled($serviceCfg->notifyBattery),
-    "batteryThreshold" => zng_service_wert("batteryThreshold") ? (int) $serviceCfg->batteryThreshold : 15,
+    "otaFile" => $otaFile,
+    "notifyOffline" => $availability && zng_meldungen_anlass_an($meldungen, "offline"),
+    "notifyBattery" => zng_meldungen_anlass_an($meldungen, "batterie"),
+    "notifyAlarm" => zng_meldungen_anlass_an($meldungen, "alarm"),
+    "notifyUpdate" => zng_meldungen_anlass_an($meldungen, "update"),
+    "batteryThreshold" => (int) $meldungen["batterieSchwelle"],
     "notifyFile" => $notifyStateFile,
     "notifyScript" => $notifyScript,
 ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));

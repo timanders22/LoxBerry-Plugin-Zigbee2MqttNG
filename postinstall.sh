@@ -33,6 +33,22 @@ PVERSION=$4 # Forth argument is Plugin version
 #LBHOMEDIR=$5 # Comes from /etc/environment now. Fifth argument is
 # Base folder of LoxBerry
 
+# 4.2.5 (Gruppe 38, V6): the LoxBerry home comes from /etc/environment; the
+# installer passes it as fifth argument too (plugininstall.pl). Without both,
+# and with a folder that is not the own one, nothing is done - a path built
+# from an empty variable would be "/zigbee2mqttng" (chown -R as root).
+LBHOMEDIR="${LBHOMEDIR:-$5}"
+case "$PDIR" in zigbee2mqttng) ;; *) echo "<FAIL> unexpected plugin folder '$PDIR'"; exit 2;; esac
+case "$LBHOMEDIR" in /?*) ;; *) echo "<FAIL> LoxBerry home folder unknown"; exit 2;; esac
+LBPCGI="${LBPCGI:-$LBHOMEDIR/webfrontend/htmlauth/plugins}"
+LBPHTML="${LBPHTML:-$LBHOMEDIR/webfrontend/html/plugins}"
+LBPTEMPL="${LBPTEMPL:-$LBHOMEDIR/templates/plugins}"
+LBPDATA="${LBPDATA:-$LBHOMEDIR/data/plugins}"
+LBPLOG="${LBPLOG:-$LBHOMEDIR/log/plugins}"
+LBPCONFIG="${LBPCONFIG:-$LBHOMEDIR/config/plugins}"
+LBPSBIN="${LBPSBIN:-$LBHOMEDIR/sbin/plugins}"
+LBPBIN="${LBPBIN:-$LBHOMEDIR/bin/plugins}"
+
 # Combine them with /etc/environment
 PCGI=$LBPCGI/$PDIR
 PHTML=$LBPHTML/$PDIR

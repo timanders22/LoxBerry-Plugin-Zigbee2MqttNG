@@ -34,6 +34,21 @@ $bridgeStatusFile = LBPDATADIR . "/zigbee2mqttng_status.json";
 $availabilityFile = LBPDATADIR . "/zigbee2mqttng_availability.json";
 $notifyStateFile = LBPDATADIR . "/zigbee2mqttng_notify.json";
 $notifyScript = LBPBINDIR . "/notify.php";
+// 4.2.5 (Gruppe 38, E4): firmware state per device, written by the extension
+$otaFile = LBPDATADIR . "/zigbee2mqttng_ota.json";
+// 4.2.5 (E2): ways of the notifications (LoxBerry, SignalBot, speech), 0600 -
+// the speech block may carry speech tokens; second copy next to the folder
+$meldungenFile = LBPCONFIGDIR . "/meldungen.json";
+// 4.2.5 (E2): at most 10 Signal messages and 10 announcements per hour (file under a lock)
+$bremseFile = LBPDATADIR . "/zigbee2mqttng_bremse.json";
+// 4.2.5 (E2): last answer of SignalBot (Test tab "Signal-Weg")
+$signalStatusFile = LBPDATADIR . "/zigbee2mqttng_signal.json";
+// 4.2.5 (Regeln/04): result of a POST for the following GET (0600, 120 s)
+$einmalmeldungFile = LBPDATADIR . "/einmalmeldung.json";
+// 4.2.5 (V10): last clearing of the house topics per family (Test tab)
+$hausLeerenFile = LBPDATADIR . "/zigbee2mqttng_haus_leeren.json";
+// 4.2.5 (Regeln/04): secret of the form token (0600)
+$aktionstokenFile = LBPCONFIGDIR . "/aktionstoken";
 
 // Matter2Lox keeps its fixed names below haus/tuer/ here (since 0.9.35)
 $matter2loxHausNamesFile = LBHOMEDIR . "/config/plugins/matter2lox.haus_namen.json";

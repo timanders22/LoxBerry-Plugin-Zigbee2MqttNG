@@ -10,11 +10,24 @@
         max-width: none;
     }
 </style>
+{% if (service.frontendAuth and service.frontendToken) or https %}
+{{ m.legende((service.frontendAuth and service.frontendToken) ? (https ? ['lesen', 'technik'] : ['technik']) : ['lesen']) }}
+{% endif %}
 {% if service.frontendAuth and service.frontendToken %}
-{{ m.legende(['technik']) }}
 <p class="hint">{{ 'Devices.UIToken' | trans }} {{ m.geheim('uitoken', service.frontendToken) }}</p>
+{% endif %}
+{# 4.2.5 (Gruppe 38, V9, T4-3): the zigbee2mqtt UI speaks only http - always http://, and through
+   https a sentence and a direct link (new window), because the browser blocks the http frame #}
+{% if https %}
+<p class="hint" id="zngui_https">{{ 'Devices.UIHttps' | trans }}</p>
+<div class="sm-knopfreihe">
+    <a data-role="none" id="zngui_link" class="sm-btn sm-b-lesen" target="_blank" rel="noopener" data-ajax="false" href="http://{{ host }}:{{ port }}/">{{ 'Devices.UILink' | trans }}</a>
+</div>
 {% endif %}
 <iframe id="zngui" scrolling="yes" seamless="seamless" style="width:100%; height:85vh;" frameborder="0"></iframe>
 <script>
-    document.getElementById("zngui").src = window.location.protocol + "//" + window.location.hostname + ":{{ port }}";
+    document.getElementById("zngui").src = "http://" + window.location.hostname + ":{{ port }}";
+    if (document.getElementById("zngui_link")) {
+        document.getElementById("zngui_link").href = "http://" + window.location.hostname + ":{{ port }}/";
+    }
 </script>

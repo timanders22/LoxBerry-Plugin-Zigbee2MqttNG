@@ -48,6 +48,23 @@ if [ -n "$PDIR" ] && [ "$PDIR" != "zigbee2mqttng" ]; then
     exit 0
 fi
 
+# 4.2.5 (Gruppe 38, V6): the LoxBerry home from /etc/environment, else the
+# fifth argument (plugininstall.pl :1608); the folders below it only when it
+# is an absolute path - never a path built from an empty variable
+LBHOMEDIR="${LBHOMEDIR:-$5}"
+case "$LBHOMEDIR" in
+    /?*)
+        LBPCGI="${LBPCGI:-$LBHOMEDIR/webfrontend/htmlauth/plugins}"
+        LBPHTML="${LBPHTML:-$LBHOMEDIR/webfrontend/html/plugins}"
+        LBPTEMPL="${LBPTEMPL:-$LBHOMEDIR/templates/plugins}"
+        LBPDATA="${LBPDATA:-$LBHOMEDIR/data/plugins}"
+        LBPLOG="${LBPLOG:-$LBHOMEDIR/log/plugins}"
+        LBPCONFIG="${LBPCONFIG:-$LBHOMEDIR/config/plugins}"
+        LBPSBIN="${LBPSBIN:-$LBHOMEDIR/sbin/plugins}"
+        LBPBIN="${LBPBIN:-$LBHOMEDIR/bin/plugins}"
+        ;;
+esac
+
 # Combine them with /etc/environment
 PCGI=$LBPCGI/$PDIR
 PHTML=$LBPHTML/$PDIR
@@ -86,9 +103,12 @@ for dir in /opt/zigbee2mqttng /opt/zigbee2mqttng.new /opt/zigbee2mqttng.old; do
     fi
 done
 
-if [ -f "$PDATA/zigbee2mqttng_haus.json" ] && [ -f "$PBIN/clear-haus-topics.php" ]; then
-    echo "<INFO> Removing haus/tuer topics"
-    php "$PBIN/clear-haus-topics.php" "$PDATA/zigbee2mqttng_haus.json"
+# 4.2.5 (Gruppe 38, V10): the house topics (haus/tuer, klima, wetter, alarm)
+# are removed with read back, directly at the broker - zigbee2mqtt is stopped
+# above, so it cannot send them again. Exit code is always 0.
+if [ -f "$PBIN/haus-leeren.php" ]; then
+    echo "<INFO> Removing the house topics of Zigbee2MqttNG"
+    php "$PBIN/haus-leeren.php" "$LBHOMEDIR" alle
 fi
 
 # 4.1.1 (B12, Q4): retained topics of zigbee2mqtt itself - only without a
@@ -111,6 +131,10 @@ done
 # an existing config/plugins folder.
 if [ -n "$PDIR" ] && [ -d "$LBPCONFIG" ]; then
     N=0
+    # 4.2.5 (V5): the marker "was running before" of an update cut short
+    if [ -f "$LBPCONFIG/$PDIR.lief_vorher" ]; then
+        rm -f "$LBPCONFIG/$PDIR.lief_vorher" && echo "<INFO> Marker $PDIR.lief_vorher removed"
+    fi
     for f in "$LBPCONFIG/$PDIR".backup.* "$LBPCONFIG/$PDIR".alt.*; do
         if [ -f "$f" ]; then
             : > "$f"
