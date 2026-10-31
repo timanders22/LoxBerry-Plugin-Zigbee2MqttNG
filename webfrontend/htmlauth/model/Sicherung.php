@@ -53,7 +53,7 @@ class Sicherung
         );
     }
 
-    /** the speech module (sprachausgabe.php 1.2.0, shared with other lines) */
+    /** the speech module (sprachausgabe.php 1.2.1 since 4.2.6, shared with other lines) */
     private static function modul()
     {
         if (!function_exists("ansage_sicherung_bereinigen")) {

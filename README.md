@@ -8,6 +8,15 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.6
+
+Pflegefassung der Welle Mehrfach-Ziele (30.10.2026), ohne Änderung an Werten, Themen oder Meldungen:
+
+* **Gemeinsame Sprachausgabe 1.2.1** (bisher 1.2.0). Die Tabelle *Weitere Ausgabeziele (gleichzeitig)* bei den Meldungen
+  und die Knöpfe *Testansage an Ziel n* im Reiter Test gibt es seit 4.2.5; neu prüft die Oberfläche vorher, ob die
+  geladene Sprachausgabe sie kann. Lädt ein anderes Plugin im selben Aufruf eine ältere Fassung zuerst, fehlen Tabelle
+  und Knöpfe, statt dass die Seite mit einem Fehler abbricht.
+
 ## Neu in 4.2.5
 
 Netzschutz, sichereres Update und neue Auskünfte für andere Plugins (Gruppe 38).

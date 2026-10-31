@@ -11,7 +11,7 @@
  * tab, section "Notifications"), occasion x way - see
  * zng_meldungen_versenden() in include/Z2mBridge.php: LoxBerry notification,
  * SignalBot (its way "messages of other plugins", answer read for at most
- * 5 s) and the shared speech module 1.2.0 (not in the quiet time - except an
+ * 5 s) and the shared speech module 1.2.1 (not in the quiet time - except an
  * alarm). At most 10 Signal messages and 10 announcements per hour.
  */
 require_once "loxberry_system.php";

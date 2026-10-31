@@ -1293,7 +1293,7 @@ function signalRow($m)
     return statusRow("Test.Signal", $state, implode(" – ", $teile));
 }
 
-/** 4.2.5 (E2): the line of the speech module (per target with 1.2.0) */
+/** 4.2.5 (E2): the line of the speech module (per target since module 1.2.0; stem 1.2.1 since 4.2.6) */
 function spracheRows($m)
 {
     if (empty($m["spracheEin"])) {

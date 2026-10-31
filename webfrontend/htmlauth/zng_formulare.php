@@ -152,10 +152,19 @@ function zng_modul()
     }
 }
 
-/** Options of the speech module for this line: the table of further targets (1.2.0) */
+/** Options of the speech module for this line: the table of further targets - since 4.2.6 (Welle Mehrfach-Ziele, stem
+ *  1.2.1, E9) only when the loaded copy of the module can do it (zng_mit_zielen()); one place for reading and drawing. */
 function zng_ansage_opt()
 {
-    return array("ziele" => true);
+    zng_modul();
+    return array("ziele" => zng_mit_zielen());
+}
+
+/** Welle Mehrfach-Ziele (Sprachmodul 1.2.1): bietet diese Linie die Tabelle der weiteren Ausgabeziele an? Nur, wenn die
+ *  geladene Abschrift sie kann - laden zwei Abschriften im selben Prozess, gilt die zuerst geladene. */
+function zng_mit_zielen() {
+    return version_compare(ANSAGE_FASSUNG, '1.2.0', '>=') && function_exists('ansage_ziele_html')
+        && function_exists('ansage_ziele_pruefen') && function_exists('ansage_testknoepfe_html');
 }
 
 /**
@@ -284,7 +293,7 @@ function zng_formular_schalten()
         return;
     }
     zng_modul();
-    $nr = ansage_test_ziel($_POST);
+    $nr = zng_mit_zielen() ? ansage_test_ziel($_POST) : 0;     // 4.2.6 (E9): only with the guard (older copy first: none)
     if ($nr === 0 && !isset($_POST["ansagetest"])) {
         zng_einmal_schreiben(array("reiter" => "test", "art" => "fehler", "texte" => array(zng_t("Formular.Unbekannt"))));
         return;
@@ -303,7 +312,7 @@ function zng_formular_schalten()
 
 /**
  * The section "Notifications" of the Settings tab: occasions x ways, SignalBot,
- * speech (module block 1.2.0), quiet time - own form "meldungen".
+ * speech (module block, stem 1.2.1 since 4.2.6), quiet time - own form "meldungen".
  */
 function zng_meldungen_html()
 {
@@ -417,7 +426,7 @@ function zng_schalten_html()
     $o = array('<form method="post" action="index.php" data-ajax="false">', '<input type="hidden" name="formular" value="schalten">');
     $o[] = '<div class="sm-knopfreihe">';
     $o[] = '<button data-role="none" type="submit" name="signaltest" value="1" class="sm-btn sm-b-aktion">' . zng_e(zng_t("Test.SignalTestKnopf")) . '</button>';
-    $ziele = ansage_testknoepfe_html($tts, zng_ansage_k(), array("klasse" => "sm-btn sm-b-aktion"));
+    $ziele = zng_mit_zielen() ? ansage_testknoepfe_html($tts, zng_ansage_k(), array("klasse" => "sm-btn sm-b-aktion")) : "";     // 4.2.6 (E9)
     if ($ziele !== "") {
         $o[] = $ziele;
     } else {

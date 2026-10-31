@@ -1333,7 +1333,7 @@ function zng_meldungen_speichern($m)
 }
 
 /**
- * 4.2.5 (E2): the context $k of the speech module (sprachausgabe.php 1.2.0):
+ * 4.2.5 (E2): the context $k of the speech module (sprachausgabe.php 1.2.1 since 4.2.6):
  * web port, https port, own data folder for <art>_letzte.json, sender
  * zigbee2mqttng (Alexa NG), translator of the line. Expects the module to
  * be loaded when 'port' is to be read.
