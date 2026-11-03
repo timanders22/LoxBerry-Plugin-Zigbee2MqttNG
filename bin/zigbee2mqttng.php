@@ -1189,14 +1189,15 @@ function zng_meldungen_vorgaben()
     return array(
         "lb" => array("offline" => true, "batterie" => true, "alarm" => false, "update" => false),
         "signal" => array("offline" => false, "batterie" => false, "alarm" => false, "update" => false),
-        "sprache" => array("offline" => false, "batterie" => false, "alarm" => false, "update" => false),
+        "sprache" => array("offline" => true, "batterie" => true, "alarm" => true, "update" => false),
         "batterieSchwelle" => 15,
         "signalEin" => false,
         "signalPraefix" => "signalbot",
-        "spracheEin" => false,
+        "spracheEin" => true,     // 4.2.7: ab Werk EIN, nur fuer eine nie gespeicherte Datei
         "ruheVon" => "22:00",
         "ruheBis" => "07:00",
         "tts" => array(),
+        "ansage_token_herkunft" => array(),
     );
 }
 
@@ -1215,6 +1216,24 @@ function zng_meldungen_lage()
  * through Signal or speech).
  * Returns array(meldungen, lage).
  */
+/** Der Block tts: nie gesetzt (leer) = ab Werk EIN (4.2.7, Stamm 1.3.2); ein gespeicherter bleibt, auch "aus". */
+function zng_tts(array $m)
+{
+    return (isset($m["tts"]) && is_array($m["tts"]) && $m["tts"]) ? $m["tts"] : ansage_werk_block();
+}
+
+/** Das Sprechtoken aus Alexa-NG und Chromecast4lox uebernehmen (Stamm 1.3.1). Schreibt nur bei einer Aenderung, nennt nie das Token. */
+function zng_ansage_token_pflegen(array $m, $k)
+{
+    list($neu, $her, $g) = ansage_token_abgleich(zng_tts($m), isset($m["ansage_token_herkunft"]) ? $m["ansage_token_herkunft"] : array(), $k);
+    if ($g) {
+        $m["tts"] = $neu;
+        $m["ansage_token_herkunft"] = $her;
+        zng_meldungen_speichern($m);
+    }
+    return $m;
+}
+
 function zng_meldungen_laden()
 {
     global $meldungenFile, $configfile;
@@ -1226,7 +1245,7 @@ function zng_meldungen_laden()
             if (!array_key_exists($k, $d)) {
                 continue;
             }
-            if (is_array($v) && $k !== "tts") {
+            if (is_array($v) && $k !== "tts" && $k !== "ansage_token_herkunft") {
                 foreach ($v as $a => $w) {
                     if (isset($d[$k][$a]) && is_bool($d[$k][$a])) {
                         $m[$k][$a] = $d[$k][$a];

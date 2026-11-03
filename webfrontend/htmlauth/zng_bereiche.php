@@ -1302,7 +1302,7 @@ function spracheRows($m)
     if (!function_exists("ansage_pruefzeile")) {
         require_once __DIR__ . "/sprachausgabe.php";
     }
-    list($stand, $text) = ansage_pruefzeile(is_array($m["tts"]) ? $m["tts"] : array(), true, zng_ansage_k());
+    list($stand, $text) = ansage_pruefzeile(ansage_token_fuer_lauf(zng_tts($m), isset($m["ansage_token_herkunft"]) ? $m["ansage_token_herkunft"] : array(), zng_ansage_k()), true, zng_ansage_k());
     $state = $stand === 1 ? "ok" : ($stand === 0 ? "fail" : "info");
     // the module masks its text itself; the table masks again - so it is unmasked here once
     return array(statusRow("Test.Sprache", $state, html_entity_decode(strip_tags((string) $text), ENT_QUOTES, "UTF-8")));

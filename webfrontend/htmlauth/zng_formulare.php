@@ -157,7 +157,7 @@ function zng_modul()
 function zng_ansage_opt()
 {
     zng_modul();
-    return array("ziele" => zng_mit_zielen());
+    return array("ziele" => zng_mit_zielen(), "token_vor_ort" => true, "aus_gewinnt" => true);
 }
 
 /** Welle Mehrfach-Ziele (Sprachmodul 1.2.1): bietet diese Linie die Tabelle der weiteren Ausgabeziele an? Nur, wenn die
@@ -214,7 +214,7 @@ function zng_formular_meldungen()
     $mangel = array();
     $bean = array();
     $hinweise = array();
-    $neu["tts"] = ansage_formular_lesen($_POST, is_array($alt["tts"]) ? $alt["tts"] : array(), $mangel, $bean, zng_ansage_opt(), $k, $hinweise);
+    $neu["tts"] = ansage_formular_lesen($_POST, zng_tts($alt), $mangel, $bean, zng_ansage_opt(), $k, $hinweise);
     $texte = array();
     foreach ($fehler as $f) {
         $texte[] = zng_t($f[0]);
@@ -299,7 +299,7 @@ function zng_formular_schalten()
         return;
     }
     $k = zng_ansage_k();
-    $r = ansage_testansage(is_array($m["tts"]) ? $m["tts"] : array(), $k, $nr);
+    $r = ansage_testansage(ansage_token_fuer_lauf(zng_tts($m), isset($m["ansage_token_herkunft"]) ? $m["ansage_token_herkunft"] : array(), $k), $k, $nr);
     LOGINF("Test announcement" . ($nr ? " target $nr" : "") . ": " . ansage_kurz($r));
     $text = (int) $r["stand"] === 1 ? sprintf(zng_t("Test.AnsageOk"), (int) $r["zeichen"])
         : sprintf(zng_t("Test.AnsageFehl"), ansage_kennung_text((string) $r["kennung"], $k));
@@ -395,7 +395,7 @@ function zng_meldungen_html()
     $h["m"] = function ($name) use ($bean) {
         return in_array($name, $bean, true) ? ' class="sm-beanstandet"' : '';
     };
-    $o[] = ansage_formular_html(is_array($m["tts"]) ? $m["tts"] : array(), $h, $k);
+    $o[] = ansage_formular_html(zng_tts($m), $h, $k);
     $o[] = '<div class="sm-knopfreihe"><button data-role="none" type="submit" class="sm-btn sm-b-aktion">'
         . zng_e(zng_t("Meldungen.Speichern")) . '</button></div>';
     $o[] = zng_formtoken_feld();
