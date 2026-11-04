@@ -1196,6 +1196,8 @@ function zng_meldungen_vorgaben()
         "spracheEin" => true,     // 4.2.7: ab Werk EIN, nur fuer eine nie gespeicherte Datei
         "ruheVon" => "22:00",
         "ruheBis" => "07:00",
+        "tafelEin" => true,     // the Dashboard displays: never set = on, a deliberate off stays
+        "tafelNamen" => "",     // empty = all open displays
         "tts" => array(),
         "ansage_token_herkunft" => array(),
     );
@@ -1220,6 +1222,19 @@ function zng_meldungen_lage()
 function zng_tts(array $m)
 {
     return (isset($m["tts"]) && is_array($m["tts"]) && $m["tts"]) ? $m["tts"] : ansage_werk_block();
+}
+
+/** The rules for the module: the own quiet time stays in zng_meldungen_versenden(), the display tick and names come from meldungen.json. */
+function zng_ansage_regeln(array $m)
+{
+    $r = array("nachtruhe" => 0, "von" => "22:00", "bis" => "07:00", "sperre_min" => 30);
+    if (isset($m["tafelEin"]) && empty($m["tafelEin"])) {
+        $r["tafel"] = 0;
+    }
+    if (isset($m["tafelNamen"]) && function_exists("ansage_tafel_namen_ok") && ansage_tafel_namen_ok($m["tafelNamen"])) {
+        $r["tafel_namen"] = $m["tafelNamen"];
+    }
+    return $r;
 }
 
 /** Das Sprechtoken aus Alexa-NG und Chromecast4lox uebernehmen (Stamm 1.3.1). Schreibt nur bei einer Aenderung, nennt nie das Token. */

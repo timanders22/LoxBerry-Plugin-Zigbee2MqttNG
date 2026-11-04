@@ -8,9 +8,14 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.8
+
+* **Ansagen auch auf den offenen Dashboard-Tafeln, ab Werk an.** Mit Dashboard ab 0.9.40 und einer offenen Tafel kommt jede Ansage dieses Plugins auch dort an: Gong, Sprache und der Text groß. Ohne Dashboard oder ohne offene Tafel wird das Ziel ohne Fehler übergangen. **Eigener Haken im Abschnitt Meldungen:** „Auch auf offenen Dashboard-Tafeln ansagen“, dazu „Nur diese Tafeln“ (leer: alle offenen). Nie gesetzt heißt an, ein bewusstes Aus bleibt auch nach jedem Update. Es gelten dieselben Regeln wie für die Lautsprecher; die Testansage nimmt eine bereite Tafel mit.
+* **Gemeinsame Sprachausgabe 1.4.0.** Einstellungen und ein gespeichertes Aus bleiben, wie sie sind; am Gerät ist nichts einzurichten.
+
 ## Neu in 4.2.7
 
-**Ab dieser Fassung sind die Sprachansagen ab Werk an, auch nach einem Update, wenn Sie die Ausgabeart nie gespeichert haben.** Eine gespeicherte Einstellung bleibt, wie sie ist, auch „aus“. **Ausschalten:** Reiter *Einstellungen*, Abschnitt Sprachausgabe, Ausgabeart **„aus“** wählen und speichern; das bleibt auch nach jedem weiteren Update aus.
+**Ab dieser Fassung sind die Sprachansagen ab Werk an, auch nach einem Update, wenn Sie die Ausgabeart nie gespeichert haben.** Eine gespeicherte Einstellung bleibt, wie sie ist, auch „aus“. **Ausschalten:** Reiter *Einstellungen*, Abschnitt Sprache, Ausgabeart **„aus“** wählen und speichern; das bleibt auch nach jedem weiteren Update aus.
 
 * **Was angesagt wird:** Gerät offline, Batterie schwach und Alarm (dringend, also auch nachts), je Weg eigene Haken. Ihre Ruhezeit bleibt, wie sie ist. Ein gespeicherter Stand bleibt; ab Werk (nie gespeichert) sind die Ansagen an.
 * **Wohin:** ab Werk zugleich Loxone Music Server (braucht seine Adresse), Google-Lautsprecher über Chromecast4lox (braucht dort ein Standardgerät oder hier den Namen) und Amazon Echo über Alexa-NG. Ein Ziel, das nicht bereitsteht, wird ohne Fehler übergangen; der Reiter *Test* sagt, was ihm fehlt. Das Sprechtoken der beiden Plugins müssen Sie nicht abschreiben: Es wird übernommen, in der Konfiguration gespeichert und nachgezogen; ein von Hand eingetragenes bleibt.

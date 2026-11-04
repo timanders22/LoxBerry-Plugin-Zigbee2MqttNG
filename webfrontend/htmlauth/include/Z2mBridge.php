@@ -595,7 +595,7 @@ function zng_meldungen_versenden(array $anlaesse, array $meldungen, $mlage, $jet
                 /* 4.2.7: Schalter "Ansagen aus", Sperre 30 min, Ziele und Token aus dem Stamm; die Ruhezeit steht darueber und bleibt die eigene. */
                 $meldungen = zng_ansage_token_pflegen($meldungen, $k);
                 $a = ansage_regel_sprechen(array(array("schluessel" => $anlass, "text" => $text, "dringend" => $dringend)), zng_tts($meldungen),
-                                           array("nachtruhe" => 0, "von" => "22:00", "bis" => "07:00", "sperre_min" => 30), $k);
+                                           zng_ansage_regeln($meldungen), $k);
                 LOGINF("Speech ($anlass): " . ansage_regel_kurz($a) . ($a["regel"] !== "" ? " " . $a["regel"] : ""));
                 $erg["sprache"][$anlass] = $a["r"] !== null ? "stand=" . (int) $a["r"]["stand"] : (string) $a["regel"];
             }

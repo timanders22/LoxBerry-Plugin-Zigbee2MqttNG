@@ -152,6 +152,32 @@ function zng_modul()
     }
 }
 
+/**
+ * Die Tafel im Formular der Linie: Haken und Tafelnamen, dieselben Felder wie ansage_regeln_html() im Stamm. Dessen uebrige Regeln bleiben hier draussen,
+ * die Linie hat ihre eigene Ruhezeit. Nach einer Beanstandung steht hier der gespeicherte Stand wie im Stamm.
+ */
+function zng_ansage_tafel_html(array $m, $mark = null)
+{
+    $k = zng_ansage_k();
+    $e = ansage_e_fn($k);
+    $r = ansage_regeln_wert(zng_ansage_regeln($m));
+    $mk = is_callable($mark) ? $mark : function ($n) { return ''; };
+    $o = array();
+    $o[] = '<div class="sm-feld" id="ansage_tafel_regel">';
+    $o[] = '    <input data-role="none" type="hidden" name="ansage_tafel_da" value="1">';
+    $o[] = '    <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;"><input data-role="none" type="checkbox" name="ansage_tafel_ein" value="1"'
+         . (!empty($r['tafel']) ? ' checked' : '') . call_user_func($mk, 'ansage_tafel_ein') . '> ' . $e(ansage_t('L_R_TAFEL', $k)) . '</label>';
+    $o[] = '    <div class="sm-hilfe">' . $e(ansage_t('R_TAFEL_HINWEIS', $k)) . '</div>';
+    $o[] = '</div>';
+    $o[] = '<div class="sm-feld">';
+    $o[] = '    <label for="ansage_tafel_namen">' . $e(ansage_t('L_R_TAFEL_NAMEN', $k)) . '</label>';
+    $o[] = '    <input data-role="none" type="text" maxlength="200" id="ansage_tafel_namen" name="ansage_tafel_namen" value="' . $e((string) $r['tafel_namen']) . '"'
+         . call_user_func($mk, 'ansage_tafel_namen') . '>';
+    $o[] = '    <div class="sm-hilfe">' . $e(ansage_t('R_TAFEL_NAMEN_HINWEIS', $k)) . '</div>';
+    $o[] = '</div>';
+    return implode("\n", $o) . "\n";
+}
+
 /** Options of the speech module for this line: the table of further targets - since 4.2.6 (Welle Mehrfach-Ziele, stem
  *  1.2.1, E9) only when the loaded copy of the module can do it (zng_mit_zielen()); one place for reading and drawing. */
 function zng_ansage_opt()
@@ -215,6 +241,10 @@ function zng_formular_meldungen()
     $bean = array();
     $hinweise = array();
     $neu["tts"] = ansage_formular_lesen($_POST, zng_tts($alt), $mangel, $bean, zng_ansage_opt(), $k, $hinweise);
+    // The display: the module reads tick and names; without the mark ansage_tafel_da the old value stays.
+    list($tafel) = ansage_regeln_formular($_POST, zng_ansage_regeln($alt), array(), $mangel, $bean, $k);
+    $neu["tafelEin"] = !empty($tafel["tafel"]);
+    $neu["tafelNamen"] = (string) $tafel["tafel_namen"];
     $texte = array();
     foreach ($fehler as $f) {
         $texte[] = zng_t($f[0]);
@@ -299,7 +329,7 @@ function zng_formular_schalten()
         return;
     }
     $k = zng_ansage_k();
-    $r = ansage_testansage(ansage_token_fuer_lauf(zng_tts($m), isset($m["ansage_token_herkunft"]) ? $m["ansage_token_herkunft"] : array(), $k), $k, $nr);
+    $r = ansage_testansage(ansage_tafel_einreihen(ansage_token_fuer_lauf(zng_tts($m), isset($m["ansage_token_herkunft"]) ? $m["ansage_token_herkunft"] : array(), $k), zng_ansage_regeln($m), $k, true), $k, $nr);
     LOGINF("Test announcement" . ($nr ? " target $nr" : "") . ": " . ansage_kurz($r));
     $text = (int) $r["stand"] === 1 ? sprintf(zng_t("Test.AnsageOk"), (int) $r["zeichen"])
         : sprintf(zng_t("Test.AnsageFehl"), ansage_kennung_text((string) $r["kennung"], $k));
@@ -396,6 +426,7 @@ function zng_meldungen_html()
         return in_array($name, $bean, true) ? ' class="sm-beanstandet"' : '';
     };
     $o[] = ansage_formular_html(zng_tts($m), $h, $k);
+    $o[] = zng_ansage_tafel_html($m, $h["m"]);
     $o[] = '<div class="sm-knopfreihe"><button data-role="none" type="submit" class="sm-btn sm-b-aktion">'
         . zng_e(zng_t("Meldungen.Speichern")) . '</button></div>';
     $o[] = zng_formtoken_feld();
