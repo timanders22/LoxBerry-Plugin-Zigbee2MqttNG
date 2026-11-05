@@ -154,24 +154,26 @@ function zng_modul()
 
 /**
  * Die Tafel im Formular der Linie: Haken und Tafelnamen, dieselben Felder wie ansage_regeln_html() im Stamm. Dessen uebrige Regeln bleiben hier draussen,
- * die Linie hat ihre eigene Ruhezeit. Nach einer Beanstandung steht hier der gespeicherte Stand wie im Stamm.
+ * die Linie hat ihre eigene Ruhezeit. Nach einer Beanstandung traegt es das Eingetippte wie der Stamm seit 1.4.1 ($wert, $haken: Rueckrufe der Einmalmeldung).
  */
-function zng_ansage_tafel_html(array $m, $mark = null)
+function zng_ansage_tafel_html(array $m, $mark = null, $wert = null, $haken = null)
 {
     $k = zng_ansage_k();
     $e = ansage_e_fn($k);
     $r = ansage_regeln_wert(zng_ansage_regeln($m));
     $mk = is_callable($mark) ? $mark : function ($n) { return ''; };
+    $wt = is_callable($wert) ? $wert : function ($n, $g) { return $g; };
+    $hk = is_callable($haken) ? $haken : function ($n, $g) { return (bool) $g; };
     $o = array();
     $o[] = '<div class="sm-feld" id="ansage_tafel_regel">';
     $o[] = '    <input data-role="none" type="hidden" name="ansage_tafel_da" value="1">';
     $o[] = '    <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;"><input data-role="none" type="checkbox" name="ansage_tafel_ein" value="1"'
-         . (!empty($r['tafel']) ? ' checked' : '') . call_user_func($mk, 'ansage_tafel_ein') . '> ' . $e(ansage_t('L_R_TAFEL', $k)) . '</label>';
+         . (call_user_func($hk, 'ansage_tafel_ein', !empty($r['tafel'])) ? ' checked' : '') . call_user_func($mk, 'ansage_tafel_ein') . '> ' . $e(ansage_t('L_R_TAFEL', $k)) . '</label>';
     $o[] = '    <div class="sm-hilfe">' . $e(ansage_t('R_TAFEL_HINWEIS', $k)) . '</div>';
     $o[] = '</div>';
     $o[] = '<div class="sm-feld">';
     $o[] = '    <label for="ansage_tafel_namen">' . $e(ansage_t('L_R_TAFEL_NAMEN', $k)) . '</label>';
-    $o[] = '    <input data-role="none" type="text" maxlength="200" id="ansage_tafel_namen" name="ansage_tafel_namen" value="' . $e((string) $r['tafel_namen']) . '"'
+    $o[] = '    <input data-role="none" type="text" maxlength="200" id="ansage_tafel_namen" name="ansage_tafel_namen" value="' . $e((string) call_user_func($wt, 'ansage_tafel_namen', $r['tafel_namen'])) . '"'
          . call_user_func($mk, 'ansage_tafel_namen') . '>';
     $o[] = '    <div class="sm-hilfe">' . $e(ansage_t('R_TAFEL_NAMEN_HINWEIS', $k)) . '</div>';
     $o[] = '</div>';
@@ -245,6 +247,8 @@ function zng_formular_meldungen()
     list($tafel) = ansage_regeln_formular($_POST, zng_ansage_regeln($alt), array(), $mangel, $bean, $k);
     $neu["tafelEin"] = !empty($tafel["tafel"]);
     $neu["tafelNamen"] = (string) $tafel["tafel_namen"];
+    // 4.2.10: a typed or deleted speech token no longer comes from the neighbour; up to 4.2.9 the next sync overwrote it.
+    $neu["ansage_token_herkunft"] = ansage_token_herkunft_formular($_POST, isset($alt["ansage_token_herkunft"]) ? $alt["ansage_token_herkunft"] : array());
     $texte = array();
     foreach ($fehler as $f) {
         $texte[] = zng_t($f[0]);
@@ -426,7 +430,7 @@ function zng_meldungen_html()
         return in_array($name, $bean, true) ? ' class="sm-beanstandet"' : '';
     };
     $o[] = ansage_formular_html(zng_tts($m), $h, $k);
-    $o[] = zng_ansage_tafel_html($m, $h["m"]);
+    $o[] = zng_ansage_tafel_html($m, $h["m"], $h["w"], function ($name, $gespeichert) use ($x2, $ein) { return $x2 ? !empty($ein[$name]) : (bool) $gespeichert; });
     $o[] = '<div class="sm-knopfreihe"><button data-role="none" type="submit" class="sm-btn sm-b-aktion">'
         . zng_e(zng_t("Meldungen.Speichern")) . '</button></div>';
     $o[] = zng_formtoken_feld();

@@ -43,6 +43,7 @@ class Sicherung
         list($meldungen) = zng_meldungen_laden();
         self::modul();
         $meldungen["tts"] = ansage_sicherung_bereinigen(is_array($meldungen["tts"]) ? $meldungen["tts"] : array());
+        unset($meldungen["ansage_token_herkunft"]);     // 4.2.10: the origin mark never goes into a backup
         return array(
             "_hinweis" => "Zigbee2MqttNG - Einstellungen (mqtt.json, service.json, meldungen.json). Enthaelt das Kennwort des MQTT-Brokers und das Token der Zigbee2mqtt UI: wie ein Kennwort aufbewahren. Das Zigbee-Netz selbst (Netzwerkschluessel, Geraete) steckt im ZIP von \"Sicherung herunterladen\".",
             "_stand" => date("Y-m-d H:i:s"),
@@ -70,6 +71,7 @@ class Sicherung
     private static function meldungenPruefen($werte)
     {
         list($aktuell) = zng_meldungen_laden();
+        unset($werte["ansage_token_herkunft"]);     // 4.2.10: never from a file; the current mark stays
         $fehler = array();
         $unbekannt = array_diff(array_map("strval", array_keys($werte)), array_keys($aktuell));
         if ($unbekannt) {
@@ -111,7 +113,7 @@ class Sicherung
                 }
             }
         }
-        return array($fehler, $neu, count(array_diff_key($aktuell, $werte)));
+        return array($fehler, $neu, count(array_diff_key($aktuell, $werte, array("ansage_token_herkunft" => 1))));
     }
 
     /**
