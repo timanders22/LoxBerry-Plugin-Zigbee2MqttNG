@@ -8,6 +8,10 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.9
+
+- Vor einem Download wird jeder offene Ausgabepuffer geleert: PHP-Warnungen oder Reste landen nicht mehr in der heruntergeladenen Datei.
+
 ## Neu in 4.2.8
 
 * **Ansagen auch auf den offenen Dashboard-Tafeln, ab Werk an.** Mit Dashboard ab 0.9.40 und einer offenen Tafel kommt jede Ansage dieses Plugins auch dort an: Gong, Sprache und der Text groß. Ohne Dashboard oder ohne offene Tafel wird das Ziel ohne Fehler übergangen. **Eigener Haken im Abschnitt Meldungen:** „Auch auf offenen Dashboard-Tafeln ansagen“, dazu „Nur diese Tafeln“ (leer: alle offenen). Nie gesetzt heißt an, ein bewusstes Aus bleibt auch nach jedem Update. Es gelten dieselben Regeln wie für die Lautsprecher; die Testansage nimmt eine bereite Tafel mit.
@@ -305,7 +309,7 @@ Dieselbe Hausvereinbarung wie in Matter2Lox (Regeln/07 Nr. 15), mit denselben Re
 ### Meldungen: LoxBerry, Signal, Sprache
 Reiter Einstellungen, Abschnitt „Meldungen“: je Anlass (Gerät nicht mehr erreichbar, Batterie schwach, Alarm,
 Firmware-Update verfügbar) LoxBerry-Benachrichtigung, Signal über das Plugin SignalBot und Sprache über die
-gemeinsame Sprachausgabe (bis zu sechs Ziele). Signal und Sprache sind ab Werk aus. Für Signal muss im SignalBot
+gemeinsame Sprachausgabe (bis zu sechs Ziele). Signal ist ab Werk aus, Sprache ab Werk an. Für Signal muss im SignalBot
 „Befehle über MQTT annehmen“ an und zigbee2mqttng unter „Meldungen anderer Plugins annehmen von“ angehakt sein. In
 der Ruhezeit (ab Werk 22:00–07:00) wird nicht gesprochen – außer bei Alarm. Höchstens 10 Signal-Meldungen und 10
 Ansagen je Stunde.

@@ -459,6 +459,7 @@ function backupSettings()
         echo $L["Sicherung.Kaputt"] . "\n";
         exit(0);
     }
+    while (ob_get_level() > 0) { @ob_end_clean(); }
     header("Content-Type: application/json; charset=utf-8");
     header('Content-Disposition: attachment; filename="zigbee2mqttng_einstellungen_' . date('Ymd_His') . '.json"');
     echo json_encode($inhalt, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
@@ -493,6 +494,7 @@ function backupNetwork()
             if ($zip === false || substr($zip, 0, 2) !== "PK") {
                 $message = $L["Backup.Refused"];
             } else {
+                while (ob_get_level() > 0) { @ob_end_clean(); }
                 header('Content-Type: application/zip');
                 header('Content-Disposition: attachment; filename="zigbee2mqttng_backup_' . date('Ymd_His') . '.zip"');
                 header('Content-Length: ' . strlen($zip));
@@ -574,6 +576,7 @@ function getTemplate($kind, $device)
         $codes = array("device" => 404, "noudpport" => 409, "kind" => 400);
         sendresponse($codes[$xml], "application/json", json_encode(array("error" => $xml)));
     }
+    while (ob_get_level() > 0) { @ob_end_clean(); }
     header("Content-Type: application/xml; charset=utf-8");
     header('Content-Disposition: attachment; filename="' . $file . '"');
     echo $xml;
