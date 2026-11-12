@@ -55,7 +55,10 @@ $log = LBLog::newLog(["name" => "Service"]);
 
 LOGSTART("Update configuration");
 
-if (in_array("ohne_yaml", $lage, true)) {
+// 4.2.13 (Nachtpruefung 12.11.2026): also without configuration.yaml. zng_yaml_lesen() says "ohne_yaml" only for a
+// file that exists; on a fresh install without php-yaml this script wrote mqtt.json and then ended with a fatal
+// error at yaml_emit() (exit code 255) - measured on the workstation, whose PHP has no yaml extension.
+if (in_array("ohne_yaml", $lage, true) || !function_exists("yaml_emit")) {
     LOGERR("php-yaml is not loaded - configuration.yaml can neither be checked nor written. Nothing was changed.");
     LOGEND("Update configuration failed");
     exit(4);

@@ -8,6 +8,11 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.13
+
+- **Berichtigt: ohne php-yaml ändert `bin/update-config.php` nichts – auch bei einer ersten Installation.** Das Skript soll ohne die PHP-Erweiterung yaml mit Rückgabewert 4 enden, ohne etwas zu schreiben. Das galt bisher nur, wenn `configuration.yaml` schon da war. Fehlte sie (erste Installation), schrieb das Skript `mqtt.json` neu und brach danach beim Schreiben der `configuration.yaml` mit einem PHP-Fehler ab (Rückgabewert 255). Jetzt prüft es die Erweiterung vorher und endet mit der Protokollzeile „php-yaml is not loaded …“. Auf einem LoxBerry mit php-yaml (die Erweiterung steht in `dpkg/apt`) ändert sich nichts; gemessen am Arbeitsrechner, dessen PHP kein yaml hat.
+- Geprüft und in Ordnung (Nachtprüfung 12.11.2026): „Geräte für die Haus-Themen“ (`hausBereiche`) bleibt in `mqtt.json` ein JSON-Objekt `{}`, auch leer – beim Speichern der Einstellungen, beim Sichern und Zurückspielen und wenn das Plugin seine Konfiguration selbst neu schreibt. Gemessen im Prüfstand unter PHP 7.4, 8.4 und 8.5 und am Gerät gelesen (`mqtt.json`, Zweitschrift und Brückendatei tragen `{}`).
+
 ## Neu in 4.2.12
 
 - Gemeinsames Sprachmodul 1.4.3: Als LoxBerry-Wurzel aus `LBHOMEDIR` gilt für die Sprachausgabe nur noch ein Ordner mit `config/plugins`, `data/plugins` und `config/system/general.json`; bis 1.4.2 genügte `config/system`, und ein Prüfstand oder Rest mit diesem Ordner wurde wie ein LoxBerry gelesen. Auf einem LoxBerry ändert sich nichts.
