@@ -201,6 +201,8 @@ function zng_bereich_settings($twig)
         "einmal" => zng_einmal_html("settings"),
         "meldungen_html" => zng_meldungen_html(),
         "sperre_html" => zng_sperre_html(),
+        // 4.2.14: "Einstellungen sichern" / "zurückspielen" through the shared backup module
+        "sicherung_html" => zng_sicherung_html(),
     ));
 }
 

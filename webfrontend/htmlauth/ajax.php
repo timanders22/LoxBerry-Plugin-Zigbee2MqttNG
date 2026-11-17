@@ -4,7 +4,6 @@ require_once "loxberry_system.php";
 require_once "loxberry_log.php";
 require_once "model/ServiceConfig.php";
 require_once "model/MqttConfig.php";
-require_once "model/Sicherung.php";
 require_once LBPBINDIR . "/defines.php";
 require_once LBPBINDIR . "/formHelper.php";
 require_once LBPBINDIR . "/zigbee2mqttng.php";
@@ -52,11 +51,12 @@ if (isset($_GET["action"])) {
     } else if ($action == "networkMap") {
         sendresponse(200, "application/json", networkMap());
     } else if ($action == "backupSettings") {
-        backupSettings();
+        // 4.2.14: "Einstellungen sichern" is a server form of index.php (form token, shared backup module);
+        // an old link or bookmark lands on the Settings tab, where the button is
+        header("Location: index.php?form=settings", true, 302);
+        exit(0);
     } else if ($action == "backupNetwork") {
         backupNetwork();
-    } else if ($action == "restoreSettings") {
-        sendresponse(200, "application/json", restoreSettings());
     } else if ($action == "getTemplate") {
         getTemplate(isset($_GET["kind"]) ? $_GET["kind"] : "", isset($_GET["device"]) ? $_GET["device"] : "");
     }
@@ -71,10 +71,12 @@ if (isset($_GET["action"])) {
  * answer. Because the browser sends the LoxBerry login along with such
  * requests, actions that change something or return settings are only
  * accepted with the header, and changing actions only as POST.
- * getTemplate is a plain download link and changes nothing. So is
- * backupSettings (4.1.1): the browser saves the file, another site cannot
- * read it - the same as the zigbee2mqtt backup (backupNetwork, up to
- * 4.1.1 the page backup.php).
+ * getTemplate is a plain download link and changes nothing. So is the
+ * zigbee2mqtt backup (backupNetwork, up to 4.1.1 the page backup.php):
+ * the browser saves the file, another site cannot read it. Up to 4.2.13
+ * "Einstellungen sichern" and "zurückspielen" were backupSettings and
+ * restoreSettings here; since 4.2.14 they are server forms of index.php
+ * through the shared backup module (zng_formulare.php).
  * 4.2.5 (Gruppe 38, V8, T2-3): the two downloads carry secrets (broker
  * password, network key). A browser names the origin of a request in
  * Sec-Fetch-Site; a link on another site ("cross-site", "same-site") is
@@ -84,11 +86,11 @@ if (isset($_GET["action"])) {
  */
 function requestFromPluginPage($action)
 {
-    if (in_array($action, array("backupNetwork", "backupSettings"), true) && isset($_SERVER["HTTP_SEC_FETCH_SITE"])
+    if (in_array($action, array("backupNetwork"), true) && isset($_SERVER["HTTP_SEC_FETCH_SITE"])
         && !in_array($_SERVER["HTTP_SEC_FETCH_SITE"], array("same-origin", "none"), true)) {
         return "fremd";
     }
-    $changing = array("setFormData", "setDevices", "applyChanges", "permitJoin", "testPort", "networkMap", "restoreSettings", "serviceAction");
+    $changing = array("setFormData", "setDevices", "applyChanges", "permitJoin", "testPort", "networkMap", "serviceAction");
     $protected = array_merge($changing, array("getFormData"));
     if (!in_array($action, $protected, true)) {
         return true;
@@ -111,57 +113,6 @@ function applyChanges()
     $ergebnis["haus"] = zng_haus_aufraeumen_melden();
     LOGEND("Restart zigbee2mqtt service finished");
     return json_encode(array_merge(array("result" => $ergebnis["ok"]), $ergebnis));
-}
-
-/**
- * 4.2.5 (V10/E1): zng_haus_aufraeumen() with one log line per family and a
- * short form for the page: array(array(familie, lage, themen, offen, nur)).
- */
-function zng_haus_aufraeumen_melden()
-{
-    $liste = array();
-    foreach (zng_haus_aufraeumen() as $a) {
-        $e = $a["ergebnis"];
-        $wer = "haus/" . $a["familie"] . ($a["nur"] ? " (" . implode(", ", $a["nur"]) . ")" : "");
-        if ($e["lage"] === "geleert") {
-            LOGOK("$wer: cleared (confirmed by the broker, " . $e["themen"] . " topics)");
-        } elseif ($e["lage"] === "nichts") {
-            LOGINF("$wer: nothing to clear");
-        } elseif ($e["lage"] === "rest") {
-            LOGWARN("$wer: still retained - please clear by hand: " . implode(", ", $e["offen"]));
-        } else {
-            LOGWARN("$wer: broker not reachable (" . $e["grund"] . ") - cleared again on the next save and on uninstall");
-        }
-        $liste[] = array("familie" => $a["familie"], "lage" => $e["lage"], "themen" => $e["themen"], "offen" => $e["offen"],
-            "nur" => $a["nur"]);
-    }
-    return $liste;
-}
-
-/**
- * Runs update-config.php and restarts the service. Returns the result of
- * zng_dienst_schalten() plus "update" (exit code of update-config.php:
- * 0 done, 3 start blocked, 4 php-yaml missing, 5 a file not written).
- * Expects LOGSTART to be called.
- */
-function zng_aenderungen_anwenden()
-{
-    global $serviceName;
-    $ausgabe = array();
-    $update = 0;
-    exec("php " . escapeshellarg(LBPBINDIR . "/update-config.php") . " 2>&1", $ausgabe, $update);
-    if ($update === 3) {
-        LOGERR("update-config.php blocked the start: a configuration file cannot be read (see the Service log)");
-    } elseif ($update !== 0) {
-        LOGERR("update-config.php ended with code $update (see the Service log)");
-    }
-    $dienst = zng_dienst_schalten($serviceName, "restart");
-    if ($dienst["ok"]) {
-        LOGOK("zigbee2mqtt restarted, PID " . $dienst["pid"]);
-    } else {
-        LOGERR("zigbee2mqtt does not run after the restart: systemctl " . $dienst["rc"] . " " . $dienst["ausgabe"] . ", state " . $dienst["zustand"]);
-    }
-    return array_merge($dienst, array("update" => $update, "ok" => $dienst["ok"] && $update === 0));
 }
 
 /**
@@ -446,27 +397,6 @@ function networkMap()
 }
 
 /**
- * 4.1.1 (B3): "Einstellungen sichern" - mqtt.json and service.json with all
- * keys and the credentials as one JSON file. Refused while a configuration
- * file is unreadable (the backup would hold defaults).
- */
-function backupSettings()
-{
-    global $L;
-    $inhalt = Sicherung::inhalt();
-    if ($inhalt === null) {
-        header("Content-Type: text/plain; charset=utf-8", true, 503);
-        echo $L["Sicherung.Kaputt"] . "\n";
-        exit(0);
-    }
-    while (ob_get_level() > 0) { @ob_end_clean(); }
-    header("Content-Type: application/json; charset=utf-8");
-    header('Content-Disposition: attachment; filename="zigbee2mqttng_einstellungen_' . date('Ymd_His') . '.json"');
-    echo json_encode($inhalt, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
-    exit(0);
-}
-
-/**
  * 4.2.0: downloads a backup of the zigbee2mqtt data folder as zip - up to
  * 4.1.1 the page backup.php, the code is the same. zigbee2mqtt builds it
  * itself on bridge/request/backup: configuration.yaml, devices,
@@ -506,60 +436,6 @@ function backupNetwork()
     header('Content-Type: text/plain; charset=utf-8', true, 503);
     echo $message . "\n";
     exit(0);
-}
-
-/**
- * 4.1.1 (B3): "Einstellungen zurückspielen". Checks the uploaded file
- * (Sicherung::pruefen), writes it only if every value passes, then brings
- * zigbee2mqtt up to date and says what happened to the service.
- */
-function restoreSettings()
-{
-    global $L, $serviceName;
-    $datei = isset($_FILES["sicherung"]) ? $_FILES["sicherung"] : null;
-    if (!is_array($datei) || !isset($datei["tmp_name"]) || !is_string($datei["tmp_name"]) || !is_uploaded_file($datei["tmp_name"])) {
-        return json_encode(array("result" => false, "errors" => array($L["Sicherung.KeineDatei"])));
-    }
-    if ((int) $datei["size"] > Sicherung::MAX_BYTE || @filesize($datei["tmp_name"]) > Sicherung::MAX_BYTE) {
-        return json_encode(array("result" => false, "errors" => array($L["Sicherung.Groesse"])));
-    }
-    list($fehler, $neu, $info) = Sicherung::pruefen((string) file_get_contents($datei["tmp_name"]));
-    if ($fehler) {
-        $texte = array();
-        foreach ($fehler as $f) {
-            $teile = explode(": ", $f, 2);
-            $texte[] = (isset($L[$teile[0]]) ? $L[$teile[0]] : $teile[0]) . (isset($teile[1]) ? ": " . $teile[1] : "");
-        }
-        return json_encode(array("result" => false, "errors" => $texte));
-    }
-    LOGSTART("Restore settings");
-    // 4.2.5 (Gruppe 38, V8, T2-5): an unreadable file is set aside as .kaputt
-    // before the backup is written - as setFormData() does; until 4.2.4 it was
-    // overwritten without a trace
-    $beiseite = array();
-    foreach (array("mqtt.json" => MqttConfig::lage(), "service.json" => ServiceConfig::lage(),
-                   "meldungen.json" => zng_meldungen_lage()) as $name => $lage) {
-        if ($lage !== "kaputt") {
-            continue;
-        }
-        $datei = LBPCONFIGDIR . "/" . $name;
-        $raw = @file_get_contents($datei);
-        if (is_string($raw) && zng_schreiben_atomar($datei . ".kaputt", $raw, ZNG_MODUS_GEHEIM)) {
-            $beiseite[] = $name;
-            LOGWARN("Restore: $name was unreadable - kept as $datei.kaputt, then written from the backup");
-        }
-    }
-    if (!Sicherung::schreiben($neu)) {
-        LOGERR("Restore: the settings could not be written - nothing was changed");
-        LOGEND("Restore failed");
-        return json_encode(array("result" => false, "errors" => array($L["Sicherung.Schreibfehler"])));
-    }
-    LOGOK("Restore: " . implode(", ", $info["teile"]) . " written, " . $info["fehlend"] . " key(s) not in the file kept their value");
-    $dienst = zng_aenderungen_anwenden();
-    $dienst["haus"] = zng_haus_aufraeumen_melden();
-    LOGEND("Restore finished");
-    return json_encode(array_merge(array("result" => true, "teile" => $info["teile"], "fehlend" => $info["fehlend"],
-        "kaputt_beiseite" => $beiseite), $dienst));
 }
 
 /**

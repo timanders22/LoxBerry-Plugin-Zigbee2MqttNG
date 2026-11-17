@@ -8,6 +8,23 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.14
+
+- **„Einstellungen sichern“ und „Einstellungen zurückspielen“ laufen über das gemeinsame Sicherungsmodul** (Modul 1.2.8), wie in den übrigen Plugins dieser Reihe. Die Sicherungsdatei behält ihre Form (Teile `mqtt`, `service`, `meldungen`, Kennzeichen `zigbee2mqttng`); die Sicherungen aller früheren Fassungen ab 4.1.1 lassen sich weiter zurückspielen. Was sich beim Zurückspielen ändert:
+  - Der Knopf wirkt nur mit dem gesetzten Haken „Ja, die geltenden Einstellungen durch die Sicherung ersetzen“; ohne ihn wird nichts geändert.
+  - Beide Knöpfe sind jetzt Formulare der Seite. Die Meldung steht danach oben im Reiter *Einstellungen*. Ein alter Verweis `ajax.php?action=backupSettings` führt auf diesen Reiter.
+  - Eine unbekannte Einstellung in der Datei wird verworfen und mit Namen genannt; bisher wurde die ganze Datei abgewiesen. Die Sicherung eines anderen Plugins wird weiter als Ganzes abgewiesen.
+  - Ein leerer Text in der Datei überschreibt keinen gesetzten Wert (etwa ein leeres Kennwort des MQTT-Brokers); der Wert bleibt, und die Meldung nennt ihn.
+  - Eine Einstellung, die eine ältere Sicherung noch nicht kannte, behält ihren Wert, und die Meldung nennt sie mit Namen (bisher nur ihre Anzahl).
+  - „Auch auf offenen Dashboard-Tafeln ansagen“ und „Nur diese Tafeln“ werden aus der Sicherung übernommen und geprüft; bis 4.2.13 blieb dabei der geltende Wert stehen.
+  - Eine Einstellung in `mqtt.json`, `service.json` oder `meldungen.json`, die dieses Plugin nicht kennt, fällt beim Zurückspielen weg, und die Meldung nennt sie.
+  - Die Datei darf bis 256 kB groß sein (bisher 64 kB).
+  - Danach wird geprüft, ob alle drei Zweitschriften ihrer Datei gleichen; sonst sagt es die Meldung.
+  - Fehlt in der Datei eine Einstellung, die jede Fassung ab 4.1.1 in ihre Sicherung geschrieben hat (etwa die Adresse des MQTT-Brokers oder die Ruhezeit der Ansagen), wird die Datei abgewiesen, und die Meldung nennt die fehlende Einstellung. Nichts wird geändert.
+  - Unverändert: Jeder Wert wird mit denselben Regeln wie beim Speichern geprüft; eine Datei mit einem ungültigen Wert ändert nichts; eine Datei mit Sprechtoken wird abgewiesen; die geltenden Sprechtoken und ihre Herkunft bleiben; eine unlesbare Konfigurationsdatei wird vorher als `.kaputt` beiseitegelegt; danach wird zigbee2mqtt neu gestartet, und die Meldung sagt, ob es läuft.
+- **Update:** Ein Update sichert den Datenordner jetzt zusätzlich über den gemeinsamen Baustein `upgrade_daten.sh` und spielt ihn gleich zu Beginn von `postinstall.sh` zurück, wie in den übrigen Plugins dieser Reihe. Die bisherige Sicherung des Plugins (Konfigurations- und Datenordner, Prüfung der Netzwerkdateien, Zweitschriften) bleibt unverändert daneben. Scheitert das Sichern, bricht das Update ab, die bisherige Fassung bleibt installiert, und zigbee2mqtt wird wieder gestartet, wenn es vorher lief.
+- **Dokumentation:** `plugin.cfg` nennt die Adresse dieses Repositorys. LoxBerry zeigt dafür in der Plugin-Verwaltung den Knopf „Dokumentation“.
+
 ## Neu in 4.2.13
 
 - **Berichtigt: ohne php-yaml ändert `bin/update-config.php` nichts – auch bei einer ersten Installation.** Das Skript soll ohne die PHP-Erweiterung yaml mit Rückgabewert 4 enden, ohne etwas zu schreiben. Das galt bisher nur, wenn `configuration.yaml` schon da war. Fehlte sie (erste Installation), schrieb das Skript `mqtt.json` neu und brach danach beim Schreiben der `configuration.yaml` mit einem PHP-Fehler ab (Rückgabewert 255). Jetzt prüft es die Erweiterung vorher und endet mit der Protokollzeile „php-yaml is not loaded …“. Auf einem LoxBerry mit php-yaml (die Erweiterung steht in `dpkg/apt`) ändert sich nichts; gemessen am Arbeitsrechner, dessen PHP kein yaml hat.

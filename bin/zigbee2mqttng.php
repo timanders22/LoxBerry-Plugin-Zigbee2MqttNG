@@ -2111,3 +2111,61 @@ function zng_v2_namen_abweichend($rows)
     }
     return $falsch;
 }
+
+/* ==================================================================
+ * Applying the settings (ajax.php applyChanges and, since 4.2.14, the
+ * restore of a backup in zng_formulare.php - until 4.2.13 both in
+ * ajax.php). Expect the LoxBerry log (LOGSTART) and, for the house
+ * topics, include/Z2mBridge.php to be loaded.
+ * ================================================================== */
+
+/**
+ * 4.2.5 (V10/E1): zng_haus_aufraeumen() with one log line per family and a
+ * short form for the page: array(array(familie, lage, themen, offen, nur)).
+ */
+function zng_haus_aufraeumen_melden()
+{
+    $liste = array();
+    foreach (zng_haus_aufraeumen() as $a) {
+        $e = $a["ergebnis"];
+        $wer = "haus/" . $a["familie"] . ($a["nur"] ? " (" . implode(", ", $a["nur"]) . ")" : "");
+        if ($e["lage"] === "geleert") {
+            LOGOK("$wer: cleared (confirmed by the broker, " . $e["themen"] . " topics)");
+        } elseif ($e["lage"] === "nichts") {
+            LOGINF("$wer: nothing to clear");
+        } elseif ($e["lage"] === "rest") {
+            LOGWARN("$wer: still retained - please clear by hand: " . implode(", ", $e["offen"]));
+        } else {
+            LOGWARN("$wer: broker not reachable (" . $e["grund"] . ") - cleared again on the next save and on uninstall");
+        }
+        $liste[] = array("familie" => $a["familie"], "lage" => $e["lage"], "themen" => $e["themen"], "offen" => $e["offen"],
+            "nur" => $a["nur"]);
+    }
+    return $liste;
+}
+
+/**
+ * Runs update-config.php and restarts the service. Returns the result of
+ * zng_dienst_schalten() plus "update" (exit code of update-config.php:
+ * 0 done, 3 start blocked, 4 php-yaml missing, 5 a file not written).
+ * Expects LOGSTART to be called.
+ */
+function zng_aenderungen_anwenden()
+{
+    global $serviceName;
+    $ausgabe = array();
+    $update = 0;
+    exec("php " . escapeshellarg(LBPBINDIR . "/update-config.php") . " 2>&1", $ausgabe, $update);
+    if ($update === 3) {
+        LOGERR("update-config.php blocked the start: a configuration file cannot be read (see the Service log)");
+    } elseif ($update !== 0) {
+        LOGERR("update-config.php ended with code $update (see the Service log)");
+    }
+    $dienst = zng_dienst_schalten($serviceName, "restart");
+    if ($dienst["ok"]) {
+        LOGOK("zigbee2mqtt restarted, PID " . $dienst["pid"]);
+    } else {
+        LOGERR("zigbee2mqtt does not run after the restart: systemctl " . $dienst["rc"] . " " . $dienst["ausgabe"] . ", state " . $dienst["zustand"]);
+    }
+    return array_merge($dienst, array("update" => $update, "ok" => $dienst["ok"] && $update === 0));
+}

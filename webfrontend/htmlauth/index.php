@@ -27,6 +27,8 @@ require_once 'include/plugin.php';
 require_once 'model/ServiceConfig.php';
 require_once 'model/MqttConfig.php';
 require_once LBPBINDIR . '/zigbee2mqttng.php';
+// 4.2.14: the description for the shared backup module (loads the copy sicherung.php)
+require_once __DIR__ . '/zng_sicherung.php';
 require_once __DIR__ . '/zng_bereiche.php';
 // 4.2.5 (Gruppe 38): the server forms (notifications, start block, test
 // buttons) - form token, POST only, 303 and a one-time message (Regeln/04).

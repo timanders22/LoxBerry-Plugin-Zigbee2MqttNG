@@ -158,60 +158,6 @@ function serviceAction(button) {
         });
 }
 
-/**
- * 4.1.1 (B3): "Einstellungen zurückspielen" - the file goes to the backend,
- * which checks every value; a half valid file changes nothing
- */
-function restoreSettings() {
-    const box = $("#sicherungergebnis");
-    const file = $("#sicherungdatei")[0].files[0];
-    if (!file) {
-        box.attr("class", "sm-fehler").text(box.data("keinedatei")).show();
-        return;
-    }
-    const data = new FormData();
-    data.append("sicherung", file);
-    box.attr("class", "").css("color", "grey").text("...").show();
-    $.ajax({ url: `ajax.php?action=restoreSettings`, type: "POST", data: data, processData: false, contentType: false, dataType: "json" })
-        .done(function (answer) {
-            box.css("color", "");
-            if (answer && answer.result) {
-                let text = box.data("ok") + " " + (answer.teile || []).join(", ") + ".";
-                if (answer.fehlend > 0) {
-                    text += " " + String(box.data("fehlend")).replace("%d", answer.fehlend);
-                }
-                text += " " + dienstText(answer) + " " + hausText(answer);
-                if ((answer.kaputt_beiseite || []).length > 0) {
-                    text += " " + String(box.data("kaputt")).replace("%s", answer.kaputt_beiseite.join(", "));
-                }
-                if ((answer.teile || []).indexOf("meldungen") >= 0) {
-                    text += " " + box.data("meldungen");
-                }
-                const klasse = answer.ok ? "sm-warnung" : "sm-fehler";
-                // 4.2.5 (Gruppe 38, V4, T5-3): the form still showed the values from before
-                // the restore - load them again, like when the page opens, and only then
-                // say what happened
-                Promise.all([fetchFormData("ServiceConfig"), Promise.resolve(loadRadioInfo()), Promise.resolve(getPid())])
-                    .then(function (r) {
-                        setFormData("ServiceConfig", r[0]);
-                        checkPort();
-                        box.attr("class", klasse).text(text + " " + box.data("neugeladen"));
-                    }, function () {
-                        box.attr("class", "sm-warnung").text(text + " " + box.data("nichtneugeladen"));
-                    });
-            } else {
-                const list = $("<ul>");
-                ((answer && answer.errors) || []).forEach(function (e) {
-                    list.append($("<li>").text(e));
-                });
-                box.attr("class", "sm-fehler").empty().append($("<b>").text(box.data("abgelehnt"))).append(list);
-            }
-        })
-        .fail(function () {
-            box.attr("class", "sm-fehler").text(dienstText(null));
-        });
-}
-
 $(document).ready(function () {
     $("#saveapply").click(function () {
         saveAndApply(["ServiceConfig"]);
@@ -219,7 +165,6 @@ $(document).ready(function () {
     $("button[data-tat]").click(function () {
         serviceAction(this);
     });
-    $("#sicherungladen").click(restoreSettings);
     $("#coordinatorPreset").change(applyPreset);
     $("#testport").click(testPort);
     $("#ServiceConfig\\[port\\]").on("input change", checkPort);

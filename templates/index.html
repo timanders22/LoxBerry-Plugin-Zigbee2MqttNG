@@ -123,27 +123,11 @@
 <hr>
 <h2>{{ 'Backup.Title' | trans }}</h2>
 
-<!-- 4.1.1 (B3): the settings of the plugin, with the credentials -->
+<!-- 4.1.1 (B3): the settings of the plugin, with the credentials; since 4.2.14 two server forms through the
+     shared backup module (form token, tick "Zurückspielen bestätigen", 303 and one-time message) -->
 <h3>{{ 'Sicherung.Titel' | trans }}</h3>
 <p>{{ 'Sicherung.Desc' | trans }}</p>
-<div class="sm-knopfreihe">
-    <a data-role="none" data-ajax="false" class="sm-btn sm-b-lesen" href="ajax.php?action=backupSettings">{{ 'Sicherung.Sichern' | trans }}</a>
-</div>
-<p class="hint"><b>{{ 'Sicherung.Secret' | trans }}</b></p>
-<div class="sm-knopfreihe">
-    <input data-role="none" type="file" id="sicherungdatei" accept=".json,application/json">
-    <button data-role="none" type="button" id="sicherungladen" class="sm-btn sm-b-aktion">{{ 'Sicherung.Zurueck' | trans }}</button>
-</div>
-<p class="hint">{{ 'Sicherung.ZurueckHinweis' | trans }}</p>
-<div id="sicherungergebnis" style="display:none"
-    data-ok="{{ 'Sicherung.Ok' | trans }}"
-    data-fehlend="{{ 'Sicherung.Fehlend' | trans }}"
-    data-abgelehnt="{{ 'Sicherung.Abgelehnt' | trans }}"
-    data-keinedatei="{{ 'Sicherung.KeineDatei' | trans }}"
-    data-neugeladen="{{ 'Sicherung.Neugeladen' | trans }}"
-    data-nichtneugeladen="{{ 'Sicherung.NichtNeugeladen' | trans }}"
-    data-meldungen="{{ 'Sicherung.MeldungenNeuLaden' | trans }}"
-    data-kaputt="{{ 'Sicherung.KaputtBeiseite' | trans }}"></div>
+{{ sicherung_html | raw }}
 
 <!-- the Zigbee network: ZIP made by zigbee2mqtt itself -->
 <h3>{{ 'Backup.NetzTitel' | trans }}</h3>

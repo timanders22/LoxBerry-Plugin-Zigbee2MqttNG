@@ -27,6 +27,10 @@
 # <FAIL> This is a fail!"
 
 # To use important variables from command line use the following code:
+# [upgrade_daten] Argumente des Installers festhalten - unten sichert der gemeinsame Baustein
+# [upgrade_daten] upgrade_daten.sh (neben diesem Skript) den ganzen Datenordner.
+UPGD_ORDNER="$3"; UPGD_WURZEL="$5"
+
 COMMAND=$0  # Zero argument is shell command
 PTEMPDIR=$1 # First argument is temp folder during install
 PSHNAME=$2  # Second argument is Plugin-Name for scipts etc.
@@ -140,5 +144,33 @@ echo "<OK> Backup checked: $(find "$SICHERUNG" -type f | wc -l) files in $SICHER
 # the copy above is lost (B3)
 php "$PTEMPPATH/bin/zweitschrift.php" ziehen "$PCONFIG" "$PDATA"
 
+# 4.2.14: error path for the shared module upgrade_daten.sh 1.1.0 (Regeln/06). If saving the data
+# folder fails below, the module cancels the update with exit 2 and the installed version stays.
+# zigbee2mqtt was stopped above (or by preroot.sh) - without this path it would stay stopped, because
+# abbrechen() is never reached behind "|| exit 2". It does what abbrechen() does, without the exit.
+upgd_bei_fehler() {
+    echo "<FAIL> The update is cancelled, nothing was changed. The Zigbee network stays as it is."
+    zb_fw_rc=0
+    if [ "$GESTOPPT" = "1" ] || [ -f "$LIEF_VORHER" ]; then
+        if sudo -n systemctl start zigbee2mqttng >/dev/null 2>&1; then
+            echo "<INFO> zigbee2mqtt started again"
+        else
+            echo "<WARNING> zigbee2mqtt could not be started again - start it on the Settings tab"
+            zb_fw_rc=1
+        fi
+    fi
+    rm -f "$LIEF_VORHER"
+    return $zb_fw_rc
+}
+
 # Exit with Status 0
+# [upgrade_daten] Gemeinsamer Baustein (Werkzeuge/gemeinsam/upgrade_daten.sh): den ganzen Datenordner
+# [upgrade_daten] neben den Ordner sichern; misslingt das, bricht die Aktualisierung mit Rueckgabe 2 ab.
+if [ -f "$(dirname "$0")/upgrade_daten.sh" ] && . "$(dirname "$0")/upgrade_daten.sh"; then
+    upgrade_daten_sichern "$UPGD_ORDNER" "$UPGD_WURZEL" || exit 2
+else
+    echo "<FAIL> Der Baustein upgrade_daten.sh fehlt neben $(basename "$0") - die Aktualisierung wird abgebrochen,"
+    echo "<FAIL> die bisherige Fassung bleibt installiert."
+    exit 2
+fi
 exit 0

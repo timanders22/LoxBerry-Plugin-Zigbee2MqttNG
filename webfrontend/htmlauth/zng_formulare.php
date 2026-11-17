@@ -13,7 +13,10 @@
  *   - after a complaint the typed values come back (X-2), never a token.
  * Forms: "meldungen" (Settings tab, E2), "sperre" (Settings tab, lift the
  * start block "rueckkopie", V3), "schalten" (Test tab: test message to
- * SignalBot, test announcement per target, E2).
+ * SignalBot, test announcement per target, E2), "sicherung" (Settings tab,
+ * "Einstellungen sichern" and "Einstellungen zurückspielen" through the
+ * shared backup module since 4.2.14; up to 4.2.13 ajax.php backupSettings
+ * and restoreSettings).
  *
  * Expects include/plugin.php ($L, defines.php), the config classes and
  * bin/zigbee2mqttng.php to be loaded.
@@ -118,7 +121,7 @@ function zng_formulare_post()
         return;
     }
     $formular = isset($_POST["formular"]) && is_string($_POST["formular"]) ? $_POST["formular"] : "";
-    $reiter = array("meldungen" => "settings", "sperre" => "settings", "schalten" => "test");
+    $reiter = array("meldungen" => "settings", "sperre" => "settings", "schalten" => "test", "sicherung" => "settings");
     $ziel = isset($reiter[$formular]) ? $reiter[$formular] : "settings";
     $soll = zng_formtoken();
     $ist = isset($_POST["formtoken"]) && is_string($_POST["formtoken"]) ? $_POST["formtoken"] : "";
@@ -138,6 +141,8 @@ function zng_formulare_post()
         zng_formular_meldungen();
     } elseif ($formular === "sperre") {
         zng_formular_sperre();
+    } elseif ($formular === "sicherung") {
+        zng_formular_sicherung();
     } else {
         zng_formular_schalten();
     }
@@ -340,6 +345,102 @@ function zng_formular_schalten()
     zng_einmal_schreiben(array("reiter" => "test", "art" => (int) $r["stand"] === 1 ? "ok" : "warn", "texte" => array($text)));
 }
 
+/**
+ * Form "sicherung" (Settings tab), since 4.2.14 through the shared backup
+ * module (zng_sicherung.php, zng_sicherung_beschreibung()):
+ *   - zng_sichern: the file for download (no redirect); refused while a
+ *     configuration file is unreadable (the backup would hold defaults);
+ *   - zng_zurueck: tick, uploaded file and size (sicherung_eingang()), then
+ *     sicherung_zurueckspielen() - read, check, set aside an unreadable file
+ *     as .kaputt, write all three files (Sicherung::schreiben()), check the
+ *     three second copies, apply the changes to zigbee2mqtt and say what
+ *     happened to it (callback 'nachziehen'). The message is the module's,
+ *     as a one-time message after the redirect.
+ */
+function zng_formular_sicherung()
+{
+    if (isset($_POST["zng_sichern"])) {
+        if (MqttConfig::lage() === "kaputt" || ServiceConfig::lage() === "kaputt" || zng_meldungen_lage() === "kaputt") {
+            zng_einmal_schreiben(array("reiter" => "settings", "art" => "fehler", "texte" => array(zng_t("Sicherung.Kaputt"))));
+            return;
+        }
+        $js = zng_sicherung_bauen();
+        if ($js === "") {
+            zng_einmal_schreiben(array("reiter" => "settings", "art" => "fehler", "texte" => array(zng_t("SICHERUNG.K_SCHREIBFEHLER"))));
+            return;
+        }
+        while (ob_get_level() > 0) { @ob_end_clean(); }
+        header("Content-Type: application/json; charset=utf-8");
+        header('Content-Disposition: attachment; filename="zigbee2mqttng_einstellungen_' . date('Ymd_His') . '.json"');
+        echo $js . "\n";
+        exit(0);
+    }
+    if (!isset($_POST["zng_zurueck"])) {
+        zng_einmal_schreiben(array("reiter" => "settings", "art" => "fehler", "texte" => array(zng_t("Formular.Unbekannt"))));
+        return;
+    }
+    $b = zng_sicherung_beschreibung();
+    list($roh, $r) = sicherung_eingang($b, $_POST, $_FILES, "zng_sicherungsdatei");
+    if ($r === null) {
+        LOGSTART("Restore settings");
+        $beiseite = array();
+        $b["speichern"] = function ($neu) use (&$beiseite) {
+            // 4.2.5 (Gruppe 38, V8, T2-5): an unreadable file is set aside as .kaputt before the backup is written
+            foreach (array("mqtt.json" => MqttConfig::lage(), "service.json" => ServiceConfig::lage(),
+                           "meldungen.json" => zng_meldungen_lage()) as $name => $lage) {
+                if ($lage !== "kaputt") {
+                    continue;
+                }
+                $datei = LBPCONFIGDIR . "/" . $name;
+                $raw = @file_get_contents($datei);
+                if (is_string($raw) && zng_schreiben_atomar($datei . ".kaputt", $raw, ZNG_MODUS_GEHEIM)) {
+                    $beiseite[] = $name;
+                    LOGWARN("Restore: $name was unreadable - kept as $datei.kaputt, then written from the backup");
+                }
+            }
+            return Sicherung::schreiben($neu);
+        };
+        $b["nachziehen"] = function ($neu, $jetzt, $r) use (&$beiseite) {
+            require_once __DIR__ . "/include/Z2mBridge.php";
+            $s = array();
+            if ($beiseite) {
+                $s[] = sprintf(zng_t("Sicherung.KaputtBeiseite"), implode(", ", $beiseite));
+            }
+            $d = zng_aenderungen_anwenden();
+            if ($d["update"] === 3 || $d["sperre"] !== "") {
+                $s[] = zng_t("Dienst.Gesperrt");
+            } elseif ($d["ok"]) {
+                $s[] = sprintf(zng_t("Dienst.Laeuft"), $d["pid"]);
+            } else {
+                $s[] = sprintf(zng_t("Dienst.LaeuftNicht"), $d["zustand"] !== "" ? $d["zustand"] : "?");
+            }
+            foreach (zng_haus_aufraeumen_melden() as $h) {
+                $wer = $h["familie"] . ($h["nur"] ? " (" . implode(", ", $h["nur"]) . ")" : "");
+                if ($h["lage"] === "geleert") {
+                    $s[] = sprintf(zng_t("Mqtt.HausGeleert"), $wer, $h["themen"]);
+                } elseif ($h["lage"] === "nichts") {
+                    $s[] = sprintf(zng_t("Mqtt.HausNichts"), $wer);
+                } elseif ($h["lage"] === "rest") {
+                    $s[] = str_replace("%t", implode(", ", $h["offen"]), sprintf(str_replace("%t", "%%t", zng_t("Mqtt.HausRest")), $wer));
+                } else {
+                    $s[] = sprintf(zng_t("Mqtt.HausKeinBroker"), $wer);
+                }
+            }
+            return $s;
+        };
+        $b["log"] = function ($zeile) {
+            LOGINF($zeile);
+        };
+        $r = sicherung_zurueckspielen($b, $roh);
+        LOGEND("Restore finished");
+    }
+    // the sentences of the module are masked by default - this page masks when it shows them (zng_einmal_html())
+    $m = sicherung_meldungen(array("e" => function ($s) { return $s; }) + $b, $r);
+    $texte = array_merge($m["fehler"], $m["hinweise"]);
+    zng_einmal_schreiben(array("reiter" => "settings", "art" => $m["fehler"] ? ($r["ok"] && !empty($r["gespeichert"]) ? "warn" : "fehler") : "ok",
+        "titel" => zng_t("Sicherung.Titel"), "texte" => $texte));
+}
+
 /* ------------------------------------------------------------------
  * HTML of the forms
  * ------------------------------------------------------------------ */
@@ -450,6 +551,33 @@ function zng_sperre_html()
         . '<div class="sm-knopfreihe"><button data-role="none" type="submit" class="sm-btn sm-b-aktion">'
         . zng_e(zng_t("Konfig.SperreAufheben")) . '</button></div>'
         . zng_formtoken_feld() . '</form>';
+}
+
+/**
+ * The two forms "sicherung" (since 4.2.14): "Einstellungen sichern" (green, reads) and the file with the tick
+ * "Zurückspielen bestätigen" of the module right before "Einstellungen zurückspielen" (orange, changes).
+ */
+function zng_sicherung_html()
+{
+    $o = array();
+    $o[] = '<form method="post" action="index.php" data-ajax="false">';
+    $o[] = '<input type="hidden" name="formular" value="sicherung">';
+    $o[] = '<div class="sm-knopfreihe"><button data-role="none" type="submit" name="zng_sichern" value="1" class="sm-btn sm-b-lesen">'
+        . zng_e(zng_t("Sicherung.Sichern")) . '</button></div>';
+    $o[] = zng_formtoken_feld();
+    $o[] = '</form>';
+    $o[] = '<p class="sm-hilfe"><b>' . zng_e(zng_t("Sicherung.Secret")) . '</b></p>';
+    $o[] = '<form method="post" action="index.php" data-ajax="false" enctype="multipart/form-data">';
+    $o[] = '<input type="hidden" name="formular" value="sicherung">';
+    $o[] = '<div class="sm-feld"><label for="zng_sicherungsdatei">' . zng_e(zng_t("Sicherung.Datei")) . '</label>'
+        . '<input data-role="none" type="file" id="zng_sicherungsdatei" name="zng_sicherungsdatei" accept=".json,application/json"></div>';
+    $o[] = sicherung_haken_zeile(zng_sicherung_beschreibung());
+    $o[] = '<div class="sm-knopfreihe"><button data-role="none" type="submit" name="zng_zurueck" value="1" class="sm-btn sm-b-aktion">'
+        . zng_e(zng_t("Sicherung.Zurueck")) . '</button></div>';
+    $o[] = zng_formtoken_feld();
+    $o[] = '</form>';
+    $o[] = '<p class="sm-hilfe">' . zng_e(zng_t("Sicherung.ZurueckHinweis")) . '</p>';
+    return implode("\n", $o) . "\n";
 }
 
 /** The form "schalten" of the Test tab (E2): test message to SignalBot, test announcement (orange) */
