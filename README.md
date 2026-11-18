@@ -8,6 +8,11 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.15
+
+- **Einstellungen sichern und zurückspielen mit dem gemeinsamen Sicherungsmodul 1.2.9 statt 1.2.8:** Die übrigen Neuerungen der Modulfassungen bis 1.2.9 betreffen Fähigkeiten, die dieses Plugin nicht nutzt; an ihm ändert sich dadurch nichts.
+- Sicherungen der früheren Fassungen werden weiter angenommen wie bisher; gemessen mit dem Prüfstand auf dem Arbeitsrechner unter PHP 7.4 und 8.4, der über einen Webserver die echten Knöpfe drückt und 0 Vorfassungen zurückspielt. Am Gerät nicht gemessen.
+
 ## Neu in 4.2.14
 
 - **„Einstellungen sichern“ und „Einstellungen zurückspielen“ laufen über das gemeinsame Sicherungsmodul** (Modul 1.2.8), wie in den übrigen Plugins dieser Reihe. Die Sicherungsdatei behält ihre Form (Teile `mqtt`, `service`, `meldungen`, Kennzeichen `zigbee2mqttng`); die Sicherungen aller früheren Fassungen ab 4.1.1 lassen sich weiter zurückspielen. Was sich beim Zurückspielen ändert:

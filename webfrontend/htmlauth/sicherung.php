@@ -172,8 +172,9 @@
  *      liste[n].feld) im Satz K_FEHLEND, alle Beanstandungen gesammelt, nichts
  *      geaendert. Setzt 'vorbehandeln' ihn (Uebergangsregel der Linie), bleibt
  *      dessen Wert, er ging durch Regel 4, und die Meldung nennt ihn mit
- *      K_FEHLT_UEBERGANG (oben gilt das weiter nur fuer 'behalten'; ein
- *      Pflichtschluessel oben wird auch dann abgewiesen). Fehlt der ganze Block,
+ *      K_FEHLT_UEBERGANG (oben bis 1.2.8 nur fuer 'behalten', ein
+ *      Pflichtschluessel oben wurde abgewiesen; seit 1.2.9 auch er, Regel 19).
+ *      Fehlt der ganze Block,
  *      entscheidet die Angabe des Blocks selbst (oben: 'pflicht' ab Werk,
  *      'vorgabe', 'behalten'; im Block: 'pflicht', 'behalten' oder ohne Angabe);
  *      seine Unterschluessel werden dann nicht einzeln verlangt. Ein Wert an
@@ -189,6 +190,18 @@
  *      Knoten eines Vermerks im Block (ein Vermerk kommt nie aus der Datei). Ohne
  *      'pflicht' und ohne ungueltigen Wert bleibt alles wie in 1.2.7; oben bleibt
  *      'fehlt' ungeprueft wie bisher (jeder andere Wert wirkt dort als 'pflicht').
+ *  19. Seit 1.2.9 (Entscheidung des Hausherrn 17.11.2026: "Ja, beides in 1.2.9
+ *      umsetzen", "Ich folge deinen Empfehlungen"): ein Pflichtschluessel oben
+ *      ('pflicht' ab Werk, ausdruecklich oder jeder andere Wert als 'vorgabe'
+ *      und 'behalten'), der in der Datei fehlt und den 'vorbehandeln' gesetzt
+ *      hat, ist ein Uebergang wie bei 'behalten' (1.2.2) und im Block (1.2.8,
+ *      Regel 18): sein Wert ging durch Regel 4 und bleibt, die Meldung nennt
+ *      ihn mit K_FEHLT_UEBERGANG ('fehlt_uebergang'). Setzt 'vorbehandeln' ihn
+ *      nicht, wird die Datei abgewiesen wie bisher; bis 1.2.8 wurde sie auch
+ *      dann abgewiesen. Gemessen vorher (17.11.2026, Quelltext aller Linien):
+ *      keine Linie setzt in 'vorbehandeln' einen Pflichtschluessel oben.
+ *      'vorgabe' bleibt im Block ein Mangel (Regel 18). Ohne 'vorbehandeln',
+ *      das einen fehlenden Pflichtschluessel oben setzt, wie in 1.2.8.
  *
  * Die Funktionen tragen das neutrale Kuerzel 'sicherung_' (wie 'ansage_' in
  * sprachausgabe.php). Laufen zwei Abschriften in einem PHP-Prozess, laedt sich
@@ -259,6 +272,8 @@
  *                              seit 1.2.2 oben: setzt 'vorbehandeln' den
  *                              fehlenden Schluessel, bleibt dessen Wert
  *                              (Name in 'fehlt_uebergang');
+ *                              seit 1.2.9 ebenso bei 'pflicht' oben
+ *                              (Regel 19);
  *                              seit 1.2.8 auch an Unterschluesseln eines
  *                              Blocks (auch Block im Block, Eintrag einer
  *                              Liste): 'pflicht' - fehlt er in einem Block,
@@ -340,7 +355,8 @@
  *   'fehlt_vorgabe' Namen, die fehlen und auf die Vorgabe gehen
  *   'fehlt_uebergang' (1.2.2) Namen, die fehlen und deren Wert 'vorbehandeln'
  *                   gesetzt hat ('fehlt' => 'behalten'; Uebergangsregel der Linie);
- *                   seit 1.2.8 auch block.feld mit 'fehlt' => 'pflicht' (Regel 18)
+ *                   seit 1.2.8 auch block.feld mit 'fehlt' => 'pflicht' (Regel 18);
+ *                   seit 1.2.9 auch Pflichtschluessel oben (Regel 19)
  *   'teile'         Ergebnisse der Teile
  *   'teile_hinweise' (1.2.0) Hinweise der Teile (fertige Saetze)
  *   'jetzt_entfernt' (1.2.4) Namen der Schluessel der geltenden Konfiguration, die
@@ -378,7 +394,7 @@ if (PHP_SAPI !== 'cli') {
 
 if (!defined('SICHERUNG_FASSUNG')) {
 
-define('SICHERUNG_FASSUNG', '1.2.8');
+define('SICHERUNG_FASSUNG', '1.2.9');
 /** Groesste Sicherungsdatei, die gelesen wird (Byte). */
 define('SICHERUNG_MAX_BYTE', 262144);
 /** Feldname des Hakens "Zurueckspielen bestaetigen" (seit 1.1.0; Wert 1). */
@@ -1327,6 +1343,13 @@ function sicherung_lesen(array $b, $roh, $jetzt = null)
             if (array_key_exists($k, $jetzt)) { $neu[$k] = $jetzt[$k]; }
             $r['fehlt_behalten'][] = $k;
         } else {
+            /* 1.2.9: auch ein Pflichtschluessel oben (ab Werk, ausdruecklich oder unbekannte Angabe), den
+             * 'vorbehandeln' gesetzt hat, ist ein Uebergang wie bei 'behalten' (1.2.2) und im Block (1.2.8): der
+             * Wert ging durch Regel 4 und bleibt (Regel 19 im Kopf); bis 1.2.8 wurde die Datei abgewiesen. */
+            if (array_key_exists($k, $bereit)) {
+                $r['fehlt_uebergang'][] = $k;
+                continue;
+            }
             $fehlend[] = $k;
         }
     }
@@ -2091,10 +2114,51 @@ function sicherung_selbsttest()
     $dp = $daten;
     unset($dp['ein']);
     $bu4 = $b;
-    $bu4['vorbehandeln'] = function ($bereit) { $bereit['ein'] = 1; return $bereit; };
+    $bu4['vorbehandeln'] = function ($bereit) { $bereit['ein'] = 3; return $bereit; };
     $r = sicherung_lesen($bu4, json_encode($dp), $jetzt);
-    $pruef('uebergang: pflicht bleibt pflicht, auch wenn vorbehandeln ihn setzt',
-           array($r['ok'], isset($r['beanstandet'][0]['name']) ? $r['beanstandet'][0]['name'] : ''), array(false, 'ein'));
+    $pruef('uebergang: pflicht oben seit 1.2.9 ebenso - der Wert der Linie, eigens genannt (bis 1.2.8 abgewiesen)',
+           array($r['ok'], (isset($r['neu']['ein']) ? $r['neu']['ein'] : null), $r['fehlt_uebergang'], $r['beanstandet'], $r['fehlt_behalten']),
+           array(true, 3, array('ein'), array(), array()));
+    $m = sicherung_meldungen($bu4, $r);
+    $h = implode("\n", $m['hinweise']);
+    $pruef('uebergang: pflicht oben - Meldung mit K_FEHLT_UEBERGANG, ohne K_FEHLEND',
+           array(strpos($h, 'K_FEHLT_UEBERGANG [ein]') !== false, strpos(implode("\n", $m['fehler']) . $h, 'K_FEHLEND') === false),
+           array(true, true));
+    $n = count($gespeichert);
+    $r = sicherung_zurueckspielen($bu4 + array('log' => function () {}), json_encode($dp));
+    $pruef('uebergang: pflicht oben - gespeichert mit dem Wert der Linie',
+           array($r['gespeichert'], count($gespeichert) - $n, isset($gespeichert[$n]['ein']) ? $gespeichert[$n]['ein'] : 'fehlt'),
+           array(true, 1, 3));
+    $r = sicherung_lesen($bu3, json_encode($dp), $jetzt);
+    $pruef('uebergang: pflicht oben, vorbehandeln setzt nichts - abgewiesen wie bisher',
+           array($r['ok'], isset($r['beanstandet'][0]['name']) ? $r['beanstandet'][0]['name'] : '', count($r['beanstandet']),
+                 $r['fehlt_uebergang']),
+           array(false, 'ein', 1, array()));
+    $bu6 = $bu4;
+    $bu6['schluessel']['ein'] = array('fehlt' => 'pflicht');
+    $r = sicherung_lesen($bu6, json_encode($dp), $jetzt);
+    $pruef('uebergang: pflicht oben ausdruecklich - ebenso Uebergang',
+           array($r['ok'], (isset($r['neu']['ein']) ? $r['neu']['ein'] : null), $r['fehlt_uebergang']), array(true, 3, array('ein')));
+    $bu6['schluessel']['ein'] = array('fehlt' => 'pflict');
+    $r = sicherung_lesen($bu6, json_encode($dp), $jetzt);
+    $pruef('uebergang: unbekannte Angabe oben wirkt als pflicht - ebenso Uebergang',
+           array($r['ok'], (isset($r['neu']['ein']) ? $r['neu']['ein'] : null), $r['fehlt_uebergang']), array(true, 3, array('ein')));
+    $d = $dp;
+    unset($d['thema']);
+    $r = sicherung_lesen($bu4, json_encode($d), $jetzt);
+    $pruef('uebergang: zwei Pflichtschluessel fehlen, vorbehandeln setzt einen - nur der andere abgewiesen',
+           array($r['ok'], isset($r['beanstandet'][0]['name']) ? $r['beanstandet'][0]['name'] : '', count($r['beanstandet'])),
+           array(false, 'thema', 1));
+    $d = $daten;
+    unset($d['takt']);
+    $bu7 = $b;
+    $bu7['vorbehandeln'] = function ($bereit) { $bereit['takt'] = 5; return $bereit; };
+    $n = count($gespeichert);
+    $r = sicherung_zurueckspielen($bu7 + array('log' => function () {}), json_encode($d));
+    $pruef('uebergang: pflicht oben, Wert der Linie taugt nicht - abgewiesen (Regel 4), nichts gespeichert',
+           array($r['ok'], isset($r['beanstandet'][0]['name']) ? $r['beanstandet'][0]['name'] : '', count($r['beanstandet']),
+                 count($gespeichert) - $n),
+           array(false, 'takt', 1, 0));
     $bu5 = $bu2;
     $bu5['schluessel']['spaet']['pruefen'] = function ($w) { return $w === 9 ? 'spaet unzulaessig' : ''; };
     $r = sicherung_lesen($bu5, json_encode($du), $jetzt);
@@ -2906,8 +2970,8 @@ function sicherung_selbsttest()
     $d = $dp;
     unset($d['a']);
     $r = sicherung_lesen($bpo, json_encode($d), $jp);
-    $pruef('pflicht block: oben bleibt Pflicht abgewiesen, auch wenn vorbehandeln den Schluessel setzt (wie 1.2.7)',
-           array($r['ok'], $pnamen($r)), array(false, array('a')));
+    $pruef('pflicht block: oben seit 1.2.9 ebenso Uebergang, wenn vorbehandeln den Schluessel setzt (bis 1.2.8 abgewiesen)',
+           array($r['ok'], $pnamen($r), isset($r['neu']['a']) ? $r['neu']['a'] : null, $r['fehlt_uebergang']), array(true, array(), 3, array('a')));
     $d = $dp;
     $d['blk'] = 'kein Block';
     $r = sicherung_lesen($bp, json_encode($d), $jp);
