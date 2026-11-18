@@ -8,6 +8,10 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.17
+
+- **Gemeinsames Sprachmodul 1.4.4:** Das Modul bringt einen gemeinsamen Weg mit, die Einstellungen der Sprachausgabe in der Konfiguration zu prüfen: unbekannte Einträge verwerfen, jeden ungültigen Eintrag einzeln nennen und alles mit denselben Sätzen melden. Dieses Plugin ruft diesen Weg nicht auf; an seinem Verhalten ändert sich dadurch nichts. Gemessen auf dem Arbeitsrechner: Abschrift byte-gleich mit der Stammfassung 1.4.4, Abschnitt [ANSAGE] der Sprachdateien um die drei Sätze dieses Wegs ergänzt und gleich der Textdatei 1.4.4 (317 Schlüssel), Syntax unter PHP 7.4 und 8.4; am Gerät nicht gemessen.
+
 ## Neu in 4.2.16
 
 - **Einstellungen sichern und zurückspielen mit dem gemeinsamen Sicherungsmodul 1.2.11 statt 1.2.9:** Neu in 1.2.10 ist, dass ein leerer Wert auch in einem Teil der Sicherung, der nur aus einem einzelnen Wert besteht (etwa einem Zugangsschlüssel in einer eigenen Datei), einen gesetzten Wert nicht mehr überschreibt; er bleibt stehen und wird in der Meldung genannt. Dieses Plugin führt keinen solchen Teil; an seinem Verhalten ändert sich dadurch nichts. Gemessen mit dem Prüfstand auf dem Arbeitsrechner unter PHP 7.4 und 8.4 (0 Vorfassungen zurückgespielt). Am Gerät nicht gemessen.
