@@ -35,7 +35,8 @@ class Plugin
         }
 
         // Creates the loxberry header
-        LBWeb::lbheader($template_title, $helplink, $helptemplate);
+        require_once dirname(__DIR__) . '/fassung.php';   // Fassung im Titel: gemeinsames Stueck fassung.php (21.11.2026)
+        LBWeb::lbheader(plugin_kopftitel($template_title, dirname(__DIR__)), $helplink, $helptemplate);
     }
 
     /**
