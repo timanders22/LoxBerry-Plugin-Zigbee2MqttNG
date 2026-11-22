@@ -8,6 +8,10 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.19
+
+- Gemeinsames Sprachmodul auf 1.5.0 nachgezogen (Einheitlichkeit aller Linien, Entscheidung des Hausherrn 22.11.2026: Nachtruhe an Nicht-Schultagen). Die Linie spricht ohne die Nachtruhe des Moduls (nur die Tafel gilt). An ihrem Verhalten ändert sich deshalb nichts.
+
 ## Neu in 4.2.18
 
 - Die Kopfzeile zeigt jetzt die installierte Fassung, einheitlich in allen Plugins.
