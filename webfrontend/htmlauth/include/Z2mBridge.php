@@ -389,6 +389,7 @@ function zng_haus_aufraeumen()
     }
     $namen = zng_read_json($hausNamesFile, array());
     $namen = is_array($namen) ? $namen : array();
+    $reserviert = zng_haus_reserviert();
     $zuordnung = zng_haus_zuordnung(zng_read_json($bridgeDevicesFile, array()), (array) $mqtt->hausBereiche, (array) $mqtt->hausAlarmAus);
     $creds = zng_broker_credentials($mqtt);
     $ergebnisse = array();
@@ -405,7 +406,8 @@ function zng_haus_aufraeumen()
         }
         $soll = array();
         foreach (array_keys($zuordnung[$familie]) as $ieee) {
-            if (isset($namen[$ieee])) {
+            // 4.2.20: a fixed name reserved in this family (given before 4.2.20) is not wanted - its topics are removed
+            if (isset($namen[$ieee]) && !in_array($namen[$ieee], $reserviert[$familie], true)) {
                 $soll[$namen[$ieee]] = true;
             }
         }

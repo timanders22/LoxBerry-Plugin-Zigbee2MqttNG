@@ -225,6 +225,15 @@ function setFormData($form, $formData)
     foreach ($data->validate() as $key) {
         $errors[] = array("form" => $form, "message" => isset($L[$key]) ? $L[$key] : $key);
     }
+    // 4.2.20 (Regeln/07 Nr. 15): a device whose name falls on a reserved name in
+    // a family that would be on is refused with device and topic - nothing saved
+    if ($form == "MqttConfig") {
+        global $bridgeDevicesFile, $hausNamesFile;
+        foreach (zng_haus_abgewiesen($data, zng_read_json($bridgeDevicesFile, array()), zng_read_json($hausNamesFile, array())) as $a) {
+            $errors[] = array("form" => $form, "message" => sprintf($L["Mqtt.ValHausReserviert"], $a["geraet"],
+                "haus/" . $a["familie"] . "/" . $a["name"]), "field" => "hausBereiche");
+        }
+    }
     if ($errors) {
         sendresponse(200, "application/json", json_encode(array("result" => false, "errors" => $errors)));
     }

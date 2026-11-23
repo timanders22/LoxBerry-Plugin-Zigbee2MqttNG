@@ -8,6 +8,13 @@ Zigbee2MqttNG ist ein Fork des Plugins [Zigbee2Mqtt](https://github.com/romanlum
 Es ist ein **eigenständiges Plugin** (Name/Ordner `zigbee2mqttng`, Dienst `zigbee2mqttng`, Installation in `/opt/zigbee2mqttng`)
 und kollidiert deshalb nicht mit dem Original. Bis Version 4.0.0 hieß das Plugin **Zigbee2Lox**.
 
+## Neu in 4.2.20
+
+- Berichtigt (Entscheidung des Hausherrn 23.11.2026, Regeln/07): Ein Gerät, dessen Name unter `haus/` auf einen reservierten Namen fällt, wird abgewiesen und gemeldet, nicht mehr umbenannt. Reserviert sind in jeder Familie `zaehler` und `anbieter`, unter `haus/wetter` außerdem `jetzt`, `heute`, `morgen`, `warnung`, `pollen`, `ok`, `datum`, `datum_text`, `zeit` und `sprache` – der feste Satz, den das Plugin Weatherdata dort sendet. Bis 4.2.19 wurde aus `zaehler` und `anbieter` still `zaehler_2` bzw. `anbieter_2`, und unter `haus/wetter` waren die übrigen Namen nicht gesperrt.
+- Ein abgewiesenes Gerät sendet keine Haus-Themen. Das Speichern im Reiter MQTT wird mit Gerät und Thema beanstandet, der Reiter Test meldet die Familie rot, und die Erweiterung schreibt eine Warnung ins Protokoll von zigbee2mqtt. Abhilfe: das Gerät in zigbee2mqtt umbenennen.
+- Aktualisierung: Ein bis 4.2.19 vergebener Name wie `zaehler_2` bleibt, wie jeder feste Name, und das Gerät sendet weiter unter ihm. Ein Fühler, der als „Wetter (außen)“ meldet und schon einen der jetzt gesperrten Namen trägt, verliert ihn; seine zurückbehaltenen Themen räumt das nächste Speichern im Reiter MQTT mit Rücklesen ab, bis dahin nennt sie der Reiter Test.
+- Reiter Test: Die neue Zeile „Reservierte Namen Erweiterung = PHP“ vergleicht die beiden Listen wortgleich.
+
 ## Neu in 4.2.19
 
 - Gemeinsames Sprachmodul auf 1.5.0 nachgezogen (Einheitlichkeit aller Linien, Entscheidung des Hausherrn 22.11.2026: Nachtruhe an Nicht-Schultagen). Die Linie spricht ohne die Nachtruhe des Moduls (nur die Tafel gilt). An ihrem Verhalten ändert sich deshalb nichts.
@@ -345,7 +352,10 @@ Dieselbe Hausvereinbarung wie in Matter2Lox (Regeln/07 Nr. 15), mit denselben Re
 
 * `<name>`: klein, Umlaute ausgeschrieben, alles außer `a-z 0-9 _ -` wird `_`. Einmal vergeben, **bleibt der Name
   fest**, auch wenn das Gerät umbenannt wird (`data/zigbee2mqttng_haus_namen.json`); ein Gerät hat in allen
-  Familien denselben Namen. `zaehler` und `anbieter` sind reserviert (`zaehler_2` …).
+  Familien denselben Namen. Reserviert und nie ein Name sind `zaehler` und `anbieter`, unter `haus/wetter` außerdem
+  `jetzt`, `heute`, `morgen`, `warnung`, `pollen`, `ok`, `datum`, `datum_text`, `zeit` und `sprache` (der feste Satz von
+  Weatherdata). Fällt ein Gerätename darauf, wird er abgewiesen, nicht umbenannt (seit 4.2.20; bis 4.2.19 wurde aus
+  `zaehler` `zaehler_2`, ein so vergebener Name bleibt).
 * Steht unter einem Thema schon ein zurückbehaltener Wert eines **anderen Anbieters**, wird er nicht
   überschrieben; der Reiter Test nennt den Konflikt und Namen, die auch Matter2Lox vergibt.
 * Nur die Felder, die das Gerät liefert; Ausreißer (Batterietod: 0 %, −40 °C …) außerhalb plausibler Grenzen

@@ -49,8 +49,20 @@ const HAUS_BASE = "haus";
 const HAUS_ROOT = "tuer";
 // 4.2.5 (E1): the families of house topics this plugin can provide
 export const FAMILIEN = ["tuer", "klima", "wetter", "alarm"];
-// 4.2.5 (V10, E-E1 A): never a <name> - they are topics of their own
-export const RESERVIERT = ["zaehler", "anbieter"];
+// 4.2.5 (V10, E-E1 A): never a <name> - they are topics of their own.
+// 4.2.20 (Regeln/07 Nr. 15): per family; haus/wetter also holds the fixed set
+// of Weatherdata. A device whose name falls on one is refused and reported
+// (zigbee2mqtt log, Test tab red, the MQTT tab is not saved), never renamed.
+// MUST BE WORD FOR WORD THE SAME AS zng_haus_reserviert() IN bin/zigbee2mqttng.php
+// (the Test tab compares both, line "Reservierte Namen").
+// HAUS_RESERVIERT BEGIN
+export const RESERVIERT = {
+    tuer: ["zaehler", "anbieter"],
+    klima: ["zaehler", "anbieter"],
+    wetter: ["zaehler", "anbieter", "jetzt", "heute", "morgen", "warnung", "pollen", "ok", "datum", "datum_text", "zeit", "sprache"],
+    alarm: ["zaehler", "anbieter"],
+};
+// HAUS_RESERVIERT END
 export const ANBIETER = "zigbee2mqttng";
 const NO_STATEMENT = "-";
 const UMLAUTS = [["ä", "ae"], ["ö", "oe"], ["ü", "ue"], ["ß", "ss"], ["Ä", "ae"], ["Ö", "oe"], ["Ü", "ue"]];
@@ -166,6 +178,11 @@ export function hausName(text) {
     }
     t = t.toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
     return t.slice(0, 40).replace(/_+$/, "");
+}
+
+// 4.2.20: is <name> reserved in this family (RESERVIERT)?
+export function hausReserviert(familie, name) {
+    return Object.prototype.hasOwnProperty.call(RESERVIERT, familie) && RESERVIERT[familie].includes(name);
 }
 
 // Name of a value as the MQTT gateway forwards it: "/", " " and "%" become "_"
@@ -317,9 +334,13 @@ export function hausBereich(ieee, felder, bereiche) {
 
 // Gives every device that needs one a fixed <name>. Names already given stay,
 // even when the device is renamed in zigbee2mqtt. A new name that is taken
-// gets the last four digits of the IEEE address appended. 4.2.5: the reserved
-// names zaehler and anbieter are skipped (zaehler_2, ...).
-export function assignHausNames(names, devices) {
+// gets the last four digits of the IEEE address appended. 4.2.20: a name that
+// is reserved in one of the families of the device (device.familien, without
+// it all families) is refused, not renamed: the device gets no name and is
+// added to abgewiesen ({ieee, name, geraet, familien}); it gets one once it is
+// renamed in zigbee2mqtt. Until 4.2.19 zaehler and anbieter became zaehler_2
+// ... - such a name, once given, stays like every fixed name.
+export function assignHausNames(names, devices, abgewiesen = []) {
     const result = {...names};
     const used = new Set(Object.values(result));
     for (const device of devices) {
@@ -327,15 +348,18 @@ export function assignHausNames(names, devices) {
             continue;
         }
         let name = hausName(device.name) || hausName(device.ieee);
+        const familien = (device.familien ?? FAMILIEN).filter((f) => hausReserviert(f, name));
+        if (familien.length > 0) {
+            abgewiesen.push({ieee: device.ieee, name, geraet: device.name, familien});
+            continue;
+        }
         let plain = name;
-        if (RESERVIERT.includes(name)) {
-            name = `${name}_2`;
-        } else if (used.has(name)) {
+        if (used.has(name)) {
             name = `${name}_${String(device.ieee).slice(-4)}`;
             plain = name;
         }
         let n = 2;
-        while (used.has(name) || RESERVIERT.includes(name)) {
+        while (used.has(name)) {
             name = `${plain}_${n++}`;
         }
         used.add(name);
@@ -836,7 +860,7 @@ export default class Zigbee2MqttNGExtension {
             return;
         }
         const teile = topic.split("/");
-        if (teile.length !== 4 || !FAMILIEN.includes(teile[1]) || RESERVIERT.includes(teile[2])) {
+        if (teile.length !== 4 || !FAMILIEN.includes(teile[1]) || hausReserviert(teile[1], teile[2])) {
             return;
         }
         // only the values, and the provider of a name (E-E1 A)
@@ -854,8 +878,13 @@ export default class Zigbee2MqttNGExtension {
         this.foreign.set(topic, data.message);
     }
 
+    // 4.2.20: familien - the families whose reserved names apply to the device:
+    // tuer, klima and alarm always (their lists are the same), wetter when it is
+    // switched on and the device reports there (as zng_haus_abgewiesen())
     hausDevices() {
-        return stateDevices(this.devices ?? []).map((d) => ({ieee: d.ieee_address, name: d.friendly_name}));
+        const wetter = this.cfg?.hausWetter ? new Set(this.hausZuordnung("wetter").map((x) => x.ieee)) : new Set();
+        return stateDevices(this.devices ?? []).map((d) => ({ieee: d.ieee_address, name: d.friendly_name,
+            familien: wetter.has(d.ieee_address) ? FAMILIEN : FAMILIEN.filter((f) => f !== "wetter")}));
     }
 
     // 4.2.5 (E1): per family the devices that report and their fields:
@@ -888,12 +917,38 @@ export default class Zigbee2MqttNGExtension {
 
     hausNamen() {
         let names = readJson(this.cfg.hausNamesFile, {});
-        const fehlt = this.hausDevices().some((d) => !names[d.ieee]);
-        if (fehlt) {
-            names = assignHausNames(names, this.hausDevices());
+        const geraete = this.hausDevices();
+        // 4.2.20: a fixed name that is reserved in a family of its device (given
+        // before 4.2.20, e.g. an outdoor sensor "Heute" under haus/wetter, or a
+        // device marked outdoor later) is taken back: the device sends no house
+        // topics, the next save on the MQTT tab removes its retained topics, and
+        // it gets a name again once it is renamed in zigbee2mqtt
+        let zurueck = false;
+        for (const d of geraete) {
+            if (names[d.ieee] && d.familien.some((f) => hausReserviert(f, names[d.ieee]))) {
+                delete names[d.ieee];
+                zurueck = true;
+            }
+        }
+        const abgewiesen = [];
+        if (zurueck || geraete.some((d) => !names[d.ieee])) {
+            names = assignHausNames(names, geraete, abgewiesen);
             writeIfChanged(this.cfg.hausNamesFile, JSON.stringify(names, null, 1));
         }
+        this.abgewiesenMelden(abgewiesen);
         return names;
+    }
+
+    // 4.2.20: one warning in the zigbee2mqtt log per change of the refused names
+    abgewiesenMelden(abgewiesen) {
+        const text = abgewiesen.map((a) => `"${a.geraet}" -> ${a.name} (${a.familien.map((f) => `${HAUS_BASE}/${f}`).join(", ")})`).join("; ");
+        if (text === (this.abgewiesenText ?? "")) {
+            return;
+        }
+        this.abgewiesenText = text;
+        if (text !== "") {
+            this.logger.warning(`Zigbee2MqttNG: reserved house name refused, the device sends no house topics - rename it in zigbee2mqtt: ${text}`);
+        }
     }
 
     async onStateChange(data) {

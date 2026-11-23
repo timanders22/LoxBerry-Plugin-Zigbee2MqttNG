@@ -596,6 +596,7 @@ function statusRows()
     // 4.2.5 (V10, E1): one line per house family, the heartbeat of the families, mjs = PHP
     $rows = array_merge($rows, hausRows($mqttcfg, $status));
     $rows[] = hausFelderRow();
+    $rows[] = hausReserviertRow();
     // 4.1.1
     $rows[] = heartbeatRow($status, $service["pid"]);
     $rows = array_merge($rows, konfigRows());
@@ -1094,7 +1095,7 @@ function gatewayRows($mqttcfg)
  */
 function hausRows($mqttcfg, $status)
 {
-    global $L, $hausNamesFile, $hausTopicsFile, $hausLeerenFile, $matter2loxHausNamesFile;
+    global $L, $hausNamesFile, $hausTopicsFile, $hausLeerenFile, $matter2loxHausNamesFile, $bridgeDevicesFile;
     $an = array("tuer" => is_enabled($mqttcfg->hausTopics), "klima" => is_enabled($mqttcfg->hausKlima),
         "wetter" => is_enabled($mqttcfg->hausWetter), "alarm" => is_enabled($mqttcfg->hausAlarm));
     $merk = zng_read_json($hausTopicsFile, array());
@@ -1104,6 +1105,9 @@ function hausRows($mqttcfg, $status)
     $conflicts = isset($status["conflicts"]) ? (array) $status["conflicts"] : array();
     $familienLaufen = isset($status["familien"]) ? (array) $status["familien"] : array();
     $hb = isset($status["heartbeat"]["ts"]) && is_numeric($status["heartbeat"]["ts"]) ? (int) $status["heartbeat"]["ts"] : 0;
+    // 4.2.20: devices whose name is reserved in a family that is on - nothing is sent for them
+    $abgewiesen = zng_haus_abgewiesen($mqttcfg, zng_read_json($bridgeDevicesFile, array()), zng_read_json($hausNamesFile, array()));
+    $reserviert = zng_haus_reserviert();
     $rows = array();
     foreach ($an as $familie => $ein) {
         $label = sprintf(zng_t("Test.HausFamilie"), $familie);
@@ -1148,6 +1152,22 @@ function hausRows($mqttcfg, $status)
             $state = $state === "fail" ? "fail" : "hint";
             $teile[] = sprintf($L["Test.HausConflict"], implode(", ", $eigene));
         }
+        // 4.2.20: refused names (device and topic) and topics still remembered under a name reserved here
+        $ab = array();
+        foreach ($abgewiesen as $a) {
+            if ($a["familie"] === $familie) {
+                $ab[] = $a["geraet"] . " (haus/" . $familie . "/" . $a["name"] . ")";
+            }
+        }
+        foreach (array_keys($namen) as $n) {
+            if (in_array((string) $n, $reserviert[$familie], true)) {
+                $ab[] = "haus/" . $familie . "/" . $n;
+            }
+        }
+        if ($ab) {
+            $state = "fail";
+            $teile[] = sprintf(zng_t("Test.HausReserviert"), implode(", ", array_values(array_unique($ab))));
+        }
         if ($familie === "tuer") {
             $names = array_values(zng_read_json($hausNamesFile, array()));
             $matter = zng_read_json($matter2loxHausNamesFile, array());
@@ -1175,6 +1195,19 @@ function hausFelderRow()
     list($gleich, $nPhp, $nMjs) = zng_haus_felder_gleich(LBPBINDIR . "/zigbee2mqttng.php", LBPBINDIR . "/zigbee2mqttng_extension.mjs");
     return statusRow("Test.HausFelder", $gleich ? "ok" : "fail",
         sprintf(zng_t($gleich ? "Test.HausFelderOk" : "Test.HausFelderFehl"), $nPhp, $nMjs));
+}
+
+/**
+ * 4.2.20: the reserved names of the extension (RESERVIERT) and of PHP
+ * (zng_haus_reserviert()), compared word for word. The two files can be
+ * given (Test of the comparison); without, the installed ones.
+ */
+function hausReserviertRow($phpDatei = null, $mjsDatei = null)
+{
+    list($gleich, $nPhp, $nMjs) = zng_haus_reserviert_gleich($phpDatei === null ? LBPBINDIR . "/zigbee2mqttng.php" : $phpDatei,
+        $mjsDatei === null ? LBPBINDIR . "/zigbee2mqttng_extension.mjs" : $mjsDatei);
+    return statusRow("Test.HausReserviertListe", $gleich ? "ok" : "fail",
+        sprintf(zng_t($gleich ? "Test.HausReserviertListeOk" : "Test.HausReserviertListeFehl"), $nPhp, $nMjs));
 }
 
 /** 4.2.5 (E4): devices with OTA, with an update (names up to 5), age of the file */

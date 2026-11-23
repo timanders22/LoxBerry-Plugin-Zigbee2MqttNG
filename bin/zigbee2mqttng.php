@@ -339,6 +339,137 @@ function zng_haus_zuordnung($devices, $bereiche, $alarmAus)
 }
 
 /**
+ * 4.2.20 (Regeln/07 Nr. 15): names that are never a <name>, per family;
+ * haus/wetter also holds the fixed set of Weatherdata. A device whose name
+ * falls on one is refused and reported (Test tab red, the MQTT tab is not
+ * saved, the extension writes a warning into the zigbee2mqtt log) - never
+ * renamed. Until 4.2.19 the extension renamed zaehler and anbieter to
+ * zaehler_2 ...; such a name, once given, stays.
+ * MUST BE WORD FOR WORD THE SAME AS RESERVIERT IN zigbee2mqttng_extension.mjs
+ * (the Test tab compares both, zng_haus_reserviert_gleich()).
+ */
+function zng_haus_reserviert()
+{
+    // HAUS_RESERVIERT BEGIN
+    $liste = array(
+        "tuer" => array("zaehler", "anbieter"),
+        "klima" => array("zaehler", "anbieter"),
+        "wetter" => array("zaehler", "anbieter", "jetzt", "heute", "morgen", "warnung", "pollen", "ok", "datum", "datum_text", "zeit", "sprache"),
+        "alarm" => array("zaehler", "anbieter"),
+    );
+    // HAUS_RESERVIERT END
+    return $liste;
+}
+
+/**
+ * 4.2.20: the two lists (PHP and the extension) between their two marker
+ * comments, one entry per family "familie=name,name,...". Two independent
+ * texts - the PHP list is NOT read from the extension.
+ * Returns array(bool same, families PHP, families extension).
+ */
+function zng_haus_reserviert_gleich($phpDatei, $mjsDatei)
+{
+    $ziehen = function ($datei) {
+        $s = (string) @file_get_contents($datei);
+        if (!preg_match('#HAUS_RESERVIERT BEGIN(.*?)//\s*HAUS_RESERVIERT END#s', $s, $m)) {
+            return array();
+        }
+        $liste = array();
+        foreach (preg_split('/\r?\n/', $m[1]) as $z) {
+            if (!preg_match('/^\s*"?([a-z]+)"?\s*(?::|=>)\s*(?:\[|array\()(.*)\z/', $z, $t)) {
+                continue;
+            }
+            preg_match_all('/"([^"]*)"/', $t[2], $n);
+            $liste[] = $t[1] . "=" . implode(",", $n[1]);
+        }
+        return $liste;
+    };
+    $a = $ziehen($phpDatei);
+    $b = $ziehen($mjsDatei);
+    return array($a !== array() && $a === $b, count($a), count($b));
+}
+
+/**
+ * 4.2.20: <name> of a text, the same rule as hausName() in the extension
+ * (Regeln/07, Namensregel): umlauts spelled out before lower case, lower case
+ * only for A-Z (strtolower() of PHP 7.4 depends on the locale), every run of
+ * other characters than a-z 0-9 _ - becomes one "_", no "_" at the start and
+ * the end, at most 40 characters, no "_" at the end after cutting.
+ */
+function zng_haus_name($text)
+{
+    $t = str_replace(array("ä", "ö", "ü", "ß", "Ä", "Ö", "Ü"), array("ae", "oe", "ue", "ss", "ae", "oe", "ue"), (string) $text);
+    $t = strtr($t, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz");
+    $t = trim((string) preg_replace('/[^a-z0-9_-]+/', "_", $t), "_");
+    return rtrim(substr($t, 0, 40), "_");
+}
+
+/**
+ * 4.2.20: does a device report under haus/tuer - a contact or a lock in its
+ * exposes (also nested in features)? The extension decides by the state
+ * (hausValues(): contact, lock_state); that both say the same is a
+ * conclusion, not measured at a device.
+ */
+function zng_haus_tuer_geraet($device)
+{
+    $gefunden = false;
+    $walk = function ($exposes) use (&$walk, &$gefunden) {
+        foreach ((array) $exposes as $e) {
+            if (!is_array($e)) {
+                continue;
+            }
+            if (isset($e["features"]) && is_array($e["features"])) {
+                $walk($e["features"]);
+                continue;
+            }
+            if (isset($e["property"]) && in_array($e["property"], array("contact", "lock_state"), true)) {
+                $gefunden = true;
+            }
+        }
+    };
+    $walk(isset($device["definition"]["exposes"]) ? $device["definition"]["exposes"] : array());
+    return $gefunden;
+}
+
+/**
+ * 4.2.20: the devices whose <name> is reserved in a family that is switched
+ * on and in which the device reports: array(array("familie", "name",
+ * "geraet")). The name is the fixed one (data/zigbee2mqttng_haus_namen.json),
+ * else the one the extension would give (zng_haus_name() of the device name,
+ * as assignHausNames()). tuer: zng_haus_tuer_geraet(); klima, wetter, alarm:
+ * zng_haus_zuordnung().
+ */
+function zng_haus_abgewiesen($mqttcfg, $devices, $namen)
+{
+    $an = array("tuer" => is_enabled($mqttcfg->hausTopics), "klima" => is_enabled($mqttcfg->hausKlima),
+        "wetter" => is_enabled($mqttcfg->hausWetter), "alarm" => is_enabled($mqttcfg->hausAlarm));
+    $namen = is_array($namen) ? $namen : array();
+    $reserviert = zng_haus_reserviert();
+    $zuordnung = zng_haus_zuordnung($devices, (array) $mqttcfg->hausBereiche, (array) $mqttcfg->hausAlarmAus);
+    $liste = array();
+    foreach (zng_state_devices($devices) as $d) {
+        if (!isset($d["ieee_address"])) {
+            continue;
+        }
+        $ieee = (string) $d["ieee_address"];
+        $geraet = (string) $d["friendly_name"];
+        $name = isset($namen[$ieee]) && is_string($namen[$ieee]) && $namen[$ieee] !== "" ? $namen[$ieee] : zng_haus_name($geraet);
+        if ($name === "") {
+            $name = zng_haus_name($ieee);
+        }
+        foreach ($an as $familie => $ein) {
+            if (!$ein || !in_array($name, $reserviert[$familie], true)) {
+                continue;
+            }
+            if ($familie === "tuer" ? zng_haus_tuer_geraet($d) : isset($zuordnung[$familie][$ieee])) {
+                $liste[] = array("familie" => $familie, "name" => $name, "geraet" => $geraet);
+            }
+        }
+    }
+    return $liste;
+}
+
+/**
  * 4.2.5 (Gruppe 38, E5): Zigbee channels from {15, 20, 25} that neither
  * overlap the WLAN channel (zng_wifi_overlap() "conflict") nor are equal or
  * next (+-1) to the Thread channel. Only a hint - changing the channel means
