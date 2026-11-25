@@ -255,6 +255,9 @@ function zng_sicherung_pruefen($k, $w, $neu = null, $roh = null)
             list($ok, $erg) = $klasse::wert((string) $f, $x, $w);
             if (!$ok) {
                 $t[] = $k . "." . $f . ": " . zng_t($erg);
+            } elseif ($k === "mqtt" && (string) $f === "topic" && is_string($x) && hb_bereich($x) !== '') {
+                // 4.2.21: kein Basisthema auf einem gemeinsamen Bereich unter haus/ (Regeln/07) - wie im Formular
+                $t[] = $k . "." . $f . ": " . sprintf(zng_t("HAUSBEREICH.SICH_W"), hb_bereich($x));
             }
         }
         return $t;

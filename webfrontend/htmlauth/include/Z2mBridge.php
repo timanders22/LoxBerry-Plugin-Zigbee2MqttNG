@@ -4,6 +4,29 @@ require_once "loxberry_io.php";
 require_once "phpMQTT/phpMQTT.php";
 require_once __DIR__ . "/../model/MqttConfig.php";
 require_once LBPBINDIR . "/zigbee2mqttng.php";
+/* 4.2.21: Statusmeldungen an SignalBot ueber das gemeinsame Modul meldung.php (Entscheidung des Hausherrn 24.11.2026,
+ * F1 "Abloesen"); es liegt neben sprachausgabe.php. Fehlt es, meldet der Versand das im Protokoll. */
+if (!function_exists("meld_fassung") && is_file(dirname(__DIR__) . "/meldung.php")) {
+    require_once dirname(__DIR__) . "/meldung.php";
+}
+
+/** 4.2.21: der Kontext des Moduls - Ordner und Datenordner der Linie, Texte aus den Sprachdateien ([SIGNALMELDUNG]). */
+function zng_meld_k()
+{
+    global $L;
+    $sprache = is_array($L) ? $L : array();
+    return array("plugin" => defined("LBPPLUGINDIR") ? (string) LBPPLUGINDIR : "",
+                 "ordner" => (defined("LBPDATADIR") && is_dir(LBPDATADIR)) ? (string) LBPDATADIR : "",
+                 "t" => function ($s) use ($sprache) { return isset($sprache[$s]) ? $sprache[$s] : $s; });
+}
+
+/** 4.2.21: der Block des Moduls aus der Spalte Signal der Melde-Tabelle (signalEin, signal[anlass]); Sperre wie ab Werk. */
+function zng_meld_block(array $m)
+{
+    $h = array();
+    foreach (ZNG_ANLAESSE as $a) { $h[$a] = !empty($m["signal"][$a]) ? 1 : 0; }
+    return array("ein" => !empty($m["signalEin"]) ? 1 : 0, "haken" => $h, "sperre_min" => defined("MELD_SPERRE_VORGABE") ? MELD_SPERRE_VORGABE : 60);
+}
 
 /**
  * 4.2.5 (Gruppe 38, V2, own finding E1): the broker went away during a
@@ -561,27 +584,14 @@ function zng_meldungen_versenden(array $anlaesse, array $meldungen, $mlage, $jet
         $erg["lb"] = true;
     }
     // 2. SignalBot and 3. speech - one message per occasion
+    $meld_l = array();     // 4.2.21: fuer das gemeinsame Modul
     foreach ($anlaesse as $anlass => $geraete) {
         $text = sprintf($t("Notify.SignalText"), $t($anlassName[$anlass]), implode(", ", $geraete));
         $dringend = $anlass === "alarm";
         if (!empty($meldungen["signalEin"]) && !empty($meldungen["signal"][$anlass])) {
-            if (!zng_bremse_frei($bremseFile, "signal", 10)) {
-                LOGWARN("SignalBot: more than 10 messages within an hour - not sent (only logged): $anlass");
-                $erg["signal"][$anlass] = "gebremst";
-            } else {
-                $q = zng_signal_senden($creds, (string) $meldungen["signalPraefix"], $text, $dringend);
-                zng_signal_merken($signalStatusFile, $q);
-                $erg["signal"][$anlass] = $q["lage"] . ($q["grund"] !== "" ? ": " . $q["grund"] : "");
-                if ($q["lage"] === "angenommen") {
-                    LOGOK("SignalBot ($anlass): angenommen");
-                } elseif ($q["lage"] === "abgelehnt") {
-                    LOGWARN("SignalBot ($anlass): abgelehnt: " . $q["grund"]);
-                } elseif ($q["lage"] === "keine") {
-                    LOGWARN("SignalBot ($anlass): keine Quittung (SignalBot nicht installiert, 'Befehle über MQTT annehmen' aus oder Brücke steht)");
-                } else {
-                    LOGWARN("SignalBot ($anlass): broker not reachable");
-                }
-            }
+            /* 4.2.21: ueber das gemeinsame Modul, gesammelt und unten in EINER Nachricht (Thema haus/meldung/zigbee2mqttng). */
+            $meld_l[] = array("schluessel" => $anlass . "|" . substr(md5(implode(",", $geraete)), 0, 12), "anlass" => $anlass,
+                              "text" => $text, "dringend" => $dringend);
         }
         if (!empty($meldungen["spracheEin"]) && !empty($meldungen["sprache"][$anlass])) {
             if (!$dringend && zng_ruhezeit($jetzt, $meldungen["ruheVon"], $meldungen["ruheBis"])) {
@@ -600,6 +610,19 @@ function zng_meldungen_versenden(array $anlaesse, array $meldungen, $mlage, $jet
                                            zng_ansage_regeln($meldungen), $k);
                 LOGINF("Speech ($anlass): " . ansage_regel_kurz($a) . ($a["regel"] !== "" ? " " . $a["regel"] : ""));
                 $erg["sprache"][$anlass] = $a["r"] !== null ? "stand=" . (int) $a["r"]["stand"] : (string) $a["regel"];
+            }
+        }
+    }
+    if ($meld_l) {     // 4.2.21: Statusmeldungen an SignalBot (Sperre, Bremse 10 je Stunde und Versand im Modul)
+        if (!function_exists("meld_regel_senden")) {
+            LOGWARN("SignalBot: meldung.php is not loaded - not sent");
+            foreach ($meld_l as $e) { $erg["signal"][$e["anlass"]] = "ohne_modul"; }
+        } else {
+            $a = meld_regel_senden($meld_l, zng_meld_block($meldungen), zng_meld_k());
+            $lage = $a["regel"] !== "" ? $a["regel"] : (is_array($a["q"]) && isset($a["q"]["lage"]) ? (string) $a["q"]["lage"] : "");
+            if ($lage === "angenommen") { LOGOK("SignalBot: " . meld_regel_kurz($a)); } else { LOGWARN("SignalBot: " . meld_regel_kurz($a)); }
+            foreach ($meld_l as $e) {
+                $erg["signal"][$e["anlass"]] = isset($a["einzeln"][$e["schluessel"]]) && $a["einzeln"][$e["schluessel"]] !== "" ? $a["einzeln"][$e["schluessel"]] : $lage;
             }
         }
     }

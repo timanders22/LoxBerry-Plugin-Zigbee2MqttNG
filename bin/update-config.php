@@ -182,6 +182,7 @@ if (!$registerTopics) {
 zng_write_if_changed($mqttGatewayConversionFile, "");
 
 $zigbee2mqttConfig["mqtt"]["base_topic"] = $mqttcfg->topic;
+zng_praefix_haus_melden($mqttcfg);   // 4.2.21: Basisthema im gemeinsamen Bereich? melden, nicht anhalten (Regeln/07)
 $zigbee2mqttConfig["mqtt"]["server"] = "mqtt://" . $creds['brokerhost'] . ":" . $creds['brokerport'];
 $zigbee2mqttConfig["mqtt"]["user"] = $creds['brokeruser'];
 $zigbee2mqttConfig["mqtt"]["password"] = $creds['brokerpass'];

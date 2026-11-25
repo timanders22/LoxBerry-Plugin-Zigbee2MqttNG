@@ -557,6 +557,9 @@ function statusRows()
     } else {
         $rows[] = statusRow("Test.Online", "fail", $state === null ? $L["Test.OnlineNoAnswer"] : $bridge->topic . "/bridge/state = " . $state);
     }
+    // 4.2.21: faellt das Basisthema auf einen gemeinsamen Bereich unter haus/ (Regeln/07)?
+    $zng_hb = zng_pruef_praefix_haus($mqttcfg);
+    $rows[] = statusRow("HAUSBEREICH.F_TEST", $zng_hb[0] === 1 ? "ok" : ($zng_hb[0] === 0 ? "fail" : "info"), $zng_hb[1]);
 
     // bridge extension: writes its start time when zigbee2mqtt loads it
     $status = zng_read_json($bridgeStatusFile, array());
@@ -1309,21 +1312,21 @@ function zng_xml_wohlgeformt($x)
 /** 4.2.5 (E2): the Signal way - off / on, SignalBot installed yes/no, last answer (time, result) */
 function signalRow($m)
 {
-    global $signalStatusFile;
     if (empty($m["signalEin"])) {
         return statusRow("Test.Signal", "info", zng_t("Test.SignalAus"));
     }
+    /* 4.2.21: Lage aus dem gemeinsamen Modul (letzte Quittung unter haus/meldung/zigbee2mqttng). */
+    require_once __DIR__ . "/include/Z2mBridge.php";
     $da = function_exists("zng_plugin_installiert") ? zng_plugin_installiert("signalbot") : null;
-    $teile = array(sprintf(zng_t("Test.SignalAn"), (string) $m["signalPraefix"]),
-        zng_t($da === true ? "Test.SignalBotDa" : ($da === false ? "Test.SignalBotFehlt" : "Test.SignalBotUnbekannt")));
-    $q = zng_read_json($signalStatusFile, null);
+    $teile = array(zng_t($da === true ? "Test.SignalBotDa" : ($da === false ? "Test.SignalBotFehlt" : "Test.SignalBotUnbekannt")));
     $state = $da === false ? "fail" : "info";
-    if (is_array($q) && isset($q["lage"], $q["zeit"])) {
-        $teile[] = sprintf(zng_t("Test.SignalLetzte"), date("d.m.Y H:i:s", (int) $q["zeit"]), (string) $q["lage"]
-            . (isset($q["grund"]) && $q["grund"] !== "" ? ": " . (string) $q["grund"] : ""));
-        $state = $q["lage"] === "angenommen" ? "ok" : ($state === "fail" ? "fail" : "hint");
+    if (!function_exists("meld_pruefzeile")) {
+        $teile[] = "meldung.php fehlt";
+        $state = "fail";
     } else {
-        $teile[] = zng_t("Test.SignalNie");
+        list($s, $text) = meld_pruefzeile(zng_meld_block($m), array(), zng_meld_k());
+        $teile[] = $text;
+        if ($s === 1 && $state !== "fail") { $state = "ok"; } elseif ($s === 0 && $state !== "fail") { $state = "hint"; }
     }
     return statusRow("Test.Signal", $state, implode(" – ", $teile));
 }
@@ -1348,4 +1351,20 @@ function fassungRow()
 {
     $v = class_exists("LBSystem") ? LBSystem::pluginversion(basename(__DIR__)) : null;
     return statusRow("Test.Fassung", is_string($v) && $v !== "" ? "info" : "hint", is_string($v) && $v !== "" ? $v : zng_t("Test.FassungUnbekannt"));
+}
+
+/**
+ * 4.2.21 (Entscheidung des Hausherrn 23.11.2026 "Nur gemeinsame Bereiche", Regeln/07): Zeile im Reiter Test -
+ * faellt das gespeicherte Themen-Praefix auf einen gemeinsamen Bereich unter haus/? Speichern und Zurueckspielen
+ * weisen ein solches Praefix ab; ein schon gespeichertes bleibt in Betrieb und ist hier rot.
+ * Liste und Pruefung aus dem gemeinsamen Modul haus_bereiche.php. Rueckgabe array(stand, html).
+ */
+function zng_pruef_praefix_haus($cfg)
+{
+    $p = zng_hb_praefix($cfg);
+    $b = hb_bereich($p);
+    if ($b !== '') {
+        return array(0, sprintf(zng_t('HAUSBEREICH.A_NEIN'), strval($p), strval($b)));
+    }
+    return array(1, sprintf(zng_t('HAUSBEREICH.A_JA'), strval($p)));
 }

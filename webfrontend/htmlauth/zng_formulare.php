@@ -240,9 +240,10 @@ function zng_formular_meldungen()
     }
     $werte["signalEin"] = isset($_POST["m_signalEin"]) && $_POST["m_signalEin"] === "1";
     $werte["spracheEin"] = isset($_POST["m_spracheEin"]) && $_POST["m_spracheEin"] === "1";
-    foreach (array("batterieSchwelle", "signalPraefix", "ruheVon", "ruheBis") as $f) {
+    foreach (array("batterieSchwelle", "ruheVon", "ruheBis") as $f) {
         $werte[$f] = isset($_POST["m_" . $f]) && is_string($_POST["m_" . $f]) ? trim($_POST["m_" . $f]) : null;
     }
+    $werte["signalPraefix"] = (string) $alt["signalPraefix"];     // 4.2.21: kein Feld mehr (haus/meldung), der Wert bleibt
     list($fehler, $neu) = zng_meldungen_pruefen($werte, $alt);
     $mangel = array();
     $bean = array();
@@ -324,11 +325,14 @@ function zng_formular_schalten()
     list($m) = zng_meldungen_laden();
     if (isset($_POST["signaltest"])) {
         require_once __DIR__ . "/include/Z2mBridge.php";
-        $q = zng_signal_senden(zng_broker_credentials(MqttConfig::load()), (string) $m["signalPraefix"], zng_t("Test.SignalTestText"), false);
-        zng_signal_merken($signalStatusFile, $q);
-        LOGINF("Test message to SignalBot: " . $q["lage"] . ($q["grund"] !== "" ? " " . $q["grund"] : ""));
-        $text = sprintf(zng_t("Test.SignalQuittung_" . $q["lage"]), $q["grund"]);
-        zng_einmal_schreiben(array("reiter" => "test", "art" => $q["lage"] === "angenommen" ? "ok" : "warn", "texte" => array($text)));
+        /* 4.2.21: ueber das gemeinsame Modul (haus/meldung/zigbee2mqttng), an Haken, Sperre und Bremse vorbei. */
+        if (!function_exists("meld_testmeldung")) {
+            zng_einmal_schreiben(array("reiter" => "test", "art" => "warn", "texte" => array("meldung.php fehlt")));
+            return;
+        }
+        list($ok, $text) = meld_testmeldung(zng_meld_k());
+        LOGINF("Test message to SignalBot: " . ($ok ? "angenommen" : "nicht angenommen"));
+        zng_einmal_schreiben(array("reiter" => "test", "art" => $ok ? "ok" : "warn", "texte" => array($text)));
         return;
     }
     zng_modul();
@@ -508,10 +512,7 @@ function zng_meldungen_html()
         $o[] = '<p class="sm-hilfe sm-aus">' . zng_e(zng_t("Meldungen.SignalNichtDa")) . '</p>';
     }
     $o[] = '</div>';
-    $o[] = '<div class="sm-feld"><label for="m_signalPraefix">' . zng_e(zng_t("Meldungen.Praefix")) . '</label>'
-        . '<input data-role="none" type="text" id="m_signalPraefix" name="m_signalPraefix" value="'
-        . zng_e($wert("m_signalPraefix", $m["signalPraefix"])) . '"' . $mark("m_signalPraefix") . '>'
-        . '<p class="sm-hilfe">' . zng_e(zng_t("Meldungen.PraefixHilfe")) . '</p></div>';
+    // 4.2.21: das Feld Praefix entfaellt - Meldungen gehen unter haus/meldung/zigbee2mqttng (gemeinsames Modul)
 
     $o[] = '<h3>' . zng_e(zng_t("Meldungen.SpracheTitel")) . '</h3>';
     $o[] = '<div class="sm-feld sm-haken"><label><input data-role="none" type="checkbox" name="m_spracheEin" value="1"'

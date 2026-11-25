@@ -225,6 +225,16 @@ function setFormData($form, $formData)
     foreach ($data->validate() as $key) {
         $errors[] = array("form" => $form, "message" => isset($L[$key]) ? $L[$key] : $key);
     }
+    /* 4.2.21 (Entscheidung des Hausherrn 23.11.2026 "Nur gemeinsame Bereiche", Regeln/07): kein Praefix auf einem
+     * gemeinsamen Bereich unter haus/ - nur hier und beim Zurueckspielen, nicht in der Pruefung beim Lesen der
+     * Konfiguration: ein schon gespeichertes bleibt in Betrieb, der Reiter Test meldet es. */
+    if ($form == "MqttConfig" && hb_bereich((string) $data->topic) !== ''
+        && (string) $data->topic !== (string) $saved->topic) {   // nur NEUE Eingaben: ein schon gespeichertes Praefix sperrt das Speichern
+        // des Reiters nicht (Regeln/07; Bauart Einspeisebremse 0.9.25)
+        $errors[] = array("form" => $form, "message" => sprintf(isset($L["HAUSBEREICH.FEHLER"])
+            ? $L["HAUSBEREICH.FEHLER"] : "HAUSBEREICH.FEHLER %s %s", (string) $data->topic,
+            hb_bereich((string) $data->topic)), "field" => "topic");
+    }
     // 4.2.20 (Regeln/07 Nr. 15): a device whose name falls on a reserved name in
     // a family that would be on is refused with device and topic - nothing saved
     if ($form == "MqttConfig") {

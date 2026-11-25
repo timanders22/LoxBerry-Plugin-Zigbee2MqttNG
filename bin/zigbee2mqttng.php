@@ -4,6 +4,7 @@
  *
  * Expects defines.php to be loaded.
  */
+require_once __DIR__ . '/haus_bereiche.php';     // gemeinsame Bereiche unter haus/ (seit 4.2.21, Regeln/07)
 
 /**
  * 4.1.1 (B7): heartbeat of the extension below <topic>/ - must match
@@ -2299,4 +2300,33 @@ function zng_aenderungen_anwenden()
         LOGERR("zigbee2mqtt does not run after the restart: systemctl " . $dienst["rc"] . " " . $dienst["ausgabe"] . ", state " . $dienst["zustand"]);
     }
     return array_merge($dienst, array("update" => $update, "ok" => $dienst["ok"] && $update === 0));
+}
+
+/**
+ * 4.2.21 (Regeln/07): das Basisthema aus der MQTT-Konfiguration - als Objekt (MqttConfig::load()) oder als
+ * Feld (Sicherung, Eichung). Leer, wenn keines eingetragen ist.
+ */
+function zng_hb_praefix($cfg)
+{
+    if (is_object($cfg)) {
+        return isset($cfg->topic) ? trim((string) $cfg->topic) : '';
+    }
+    return (is_array($cfg) && isset($cfg['topic'])) ? trim((string) $cfg['topic']) : '';
+}
+
+/**
+ * 4.2.21: einmal je Aenderung eine Protokollzeile, solange das Praefix auf einen gemeinsamen Bereich faellt; der
+ * Versand bleibt, wie er ist. Gemerkt in praefix_haus_gemeldet.txt im Datenordner. Rueckgabe der Bereich oder ''.
+ */
+function zng_praefix_haus_melden($cfg, $merk = null)
+{
+    $p = zng_hb_praefix($cfg);
+    if ($merk === null) {
+        $merk = (defined('LBPDATADIR') ? LBPDATADIR : sys_get_temp_dir()) . '/praefix_haus_gemeldet.txt';
+    }
+    $b = hb_melden_faellig($p, $merk);
+    if ($b !== '') {
+        if (function_exists('LOGWARN')) { LOGWARN(hb_logtext($p, $b)); }
+    }
+    return $b;
 }
